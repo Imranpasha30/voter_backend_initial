@@ -1,0 +1,51 @@
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+from typing import List
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class Settings(BaseSettings):
+    # App
+    APP_NAME: str = "Voter Management API"
+    APP_VERSION: str = "1.0.0"
+    DEBUG: bool = True
+    
+    # Database
+    DATABASE_URL: str
+    
+    # Security
+    SECRET_KEY: str = "fallback-secret-key-change-in-production-min-32-chars-1234567890abcdef"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    
+    # Server
+    HOST: str = "0.0.0.0"
+    PORT: int = 5000
+    
+    # CORS
+    CORS_ORIGINS: List[str] = ["*"]
+    CORS_CREDENTIALS: bool = True
+    CORS_METHODS: List[str] = ["*"]
+    CORS_HEADERS: List[str] = ["*"]
+    
+    # Pagination
+    DEFAULT_PAGE_SIZE: int = 20
+    MAX_PAGE_SIZE: int = 100
+    
+    # Validation
+    PASSWORD_MIN_LENGTH: int = 8
+    PHONE_MIN_LENGTH: int = 10
+    PHONE_MAX_LENGTH: int = 15
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+        extra = "ignore"  # ✅ CRITICAL - Ignore extra env vars
+
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
+
+settings = get_settings()
