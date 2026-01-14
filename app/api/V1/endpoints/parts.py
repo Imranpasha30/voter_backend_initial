@@ -6,13 +6,20 @@ from typing import Optional
 from app.db.session import get_db
 from app.models.part import Part
 from app.models.voter import Voter
+from app.models.user_area import UserArea
 from app.schemas.part import PartResponse, PartsListResponse
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.core.config import settings
 
-
 router = APIRouter()
+
+
+# Helper function to get user's allocated area_ids
+def get_user_area_ids(user_id: int, db: Session) -> list:
+    """Get all area_ids allocated to the user"""
+    user_areas = db.query(UserArea.area_id).filter(UserArea.user_id == user_id).all()
+    return [area.area_id for area in user_areas]
 
 
 @router.get("/", response_model=PartsListResponse)
@@ -25,11 +32,24 @@ def get_all_parts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get all parts (constituencies) with voter counts"""
+    """Get all parts (constituencies) with voter counts - only from allocated areas"""
+    # Get user's allocated area_ids
+    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    
+    if not user_area_ids:
+        return PartsListResponse(
+            total=0,
+            page=page,
+            page_size=page_size,
+            parts=[]
+        )
+    
     query = db.query(
         Part,
         func.count(Voter.voter_id).label('voter_count')
-    ).outerjoin(Voter, Part.part_id == Voter.part_id).group_by(Part.part_id)
+    ).outerjoin(Voter, Part.part_id == Voter.part_id)\
+     .filter(Part.area_id.in_(user_area_ids))\
+     .group_by(Part.part_id)
     
     # Search filter
     if search:
@@ -78,10 +98,18 @@ def get_part_by_id(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get specific part by ID"""
+    """Get specific part by ID - only from allocated areas"""
     part = db.query(Part).filter(Part.part_id == part_id).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
+    
+    # Check if user has access to this part's area
+    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    if part.area_id not in user_area_ids:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: You don't have permission to view this part"
+        )
     
     voter_count = db.query(func.count(Voter.voter_id)).filter(
         Voter.part_id == part_id
@@ -103,10 +131,18 @@ def get_part_by_number(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get specific part by part number"""
+    """Get specific part by part number - only from allocated areas"""
     part = db.query(Part).filter(Part.part_no == part_no).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
+    
+    # Check if user has access to this part's area
+    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    if part.area_id not in user_area_ids:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: You don't have permission to view this part"
+        )
     
     voter_count = db.query(func.count(Voter.voter_id)).filter(
         Voter.part_id == part.part_id
@@ -128,10 +164,18 @@ def get_part_voter_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get voter summary for a specific part"""
+    """Get voter summary for a specific part - only from allocated areas"""
     part = db.query(Part).filter(Part.part_id == part_id).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
+    
+    # Check if user has access to this part's area
+    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    if part.area_id not in user_area_ids:
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied: You don't have permission to view this part"
+        )
     
     # Total voters
     total_voters = db.query(func.count(Voter.voter_id)).filter(
@@ -164,16 +208,33 @@ def get_parts_overview(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get overview statistics of all parts"""
-    total_parts = db.query(func.count(Part.part_id)).scalar()
-    total_voters = db.query(func.count(Voter.voter_id)).scalar()
+    """Get overview statistics of all parts - only from allocated areas"""
+    # Get user's allocated area_ids
+    user_area_ids = get_user_area_ids(current_user.user_id, db)
     
-    # Parts with most voters
+    if not user_area_ids:
+        return {
+            "total_parts": 0,
+            "total_voters": 0,
+            "average_voters_per_part": 0,
+            "top_parts": []
+        }
+    
+    total_parts = db.query(func.count(Part.part_id)).filter(
+        Part.area_id.in_(user_area_ids)
+    ).scalar()
+    
+    total_voters = db.query(func.count(Voter.voter_id)).join(
+        Part, Voter.part_id == Part.part_id
+    ).filter(Part.area_id.in_(user_area_ids)).scalar()
+    
+    # Parts with most voters (within allocated areas)
     top_parts = db.query(
         Part.part_no,
         Part.part_name_en,
         func.count(Voter.voter_id).label('voter_count')
     ).join(Voter, Part.part_id == Voter.part_id)\
+     .filter(Part.area_id.in_(user_area_ids))\
      .group_by(Part.part_id, Part.part_no, Part.part_name_en)\
      .order_by(func.count(Voter.voter_id).desc())\
      .limit(10).all()

@@ -1,8 +1,8 @@
 """Create complete database schema
 
-Revision ID: 95911ef40d07
+Revision ID: 2d567847734c
 Revises: 
-Create Date: 2026-01-09 18:15:13.835103
+Create Date: 2026-01-12 17:06:37.476315
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '95911ef40d07'
+revision: str = '2d567847734c'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -93,7 +93,7 @@ def upgrade() -> None:
     sa.Column('gender', sa.String(length=255), nullable=True),
     sa.Column('knows_corporator', sa.Boolean(), nullable=True),
     sa.Column('satisfied_with_corporator', sa.Boolean(), nullable=True),
-    sa.Column('knows_politician', sa.Boolean(), nullable=True),
+    sa.Column('knows_politician', sa.Text(), nullable=True),
     sa.Column('supports_politician', sa.String(length=255), nullable=True),
     sa.Column('politician_visit_freq', sa.String(length=255), nullable=True),
     sa.Column('services', sa.Text(), nullable=True),
@@ -155,6 +155,7 @@ def upgrade() -> None:
     sa.Column('gender', sa.String(length=255), nullable=True),
     sa.Column('is_eligible_to_vote', sa.Boolean(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('voter_id', sa.String(length=50), nullable=True),
     sa.ForeignKeyConstraint(['form_data_id'], ['form_data.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('member_id')
     )

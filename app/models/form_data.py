@@ -27,7 +27,7 @@ class FormData(Base):
     # Political Awareness
     knows_corporator = Column(Boolean)
     satisfied_with_corporator = Column(Boolean)
-    knows_politician = Column(Boolean)
+    knows_politician = Column(Text)
     supports_politician = Column(String(255))
     politician_visit_freq = Column(String(255))
     

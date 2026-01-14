@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List
+from pydantic import BaseModel, Field, RootModel
+from typing import Optional, List, Dict
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -9,6 +9,7 @@ class FamilyMemberCreate(BaseModel):
     age: int
     gender: str
     is_eligible_to_vote: bool
+    voter_id: Optional[str] = None
 
 
 class FormDataCreate(BaseModel):
@@ -27,12 +28,12 @@ class FormDataCreate(BaseModel):
     # Political
     knows_corporator: Optional[bool] = None
     satisfied_with_corporator: Optional[bool] = None
-    knows_politician: Optional[bool] = None
+    knows_politician: Optional[str] = None  # ✅ Changed to string
     supports_politician: Optional[str] = None
     politician_visit_freq: Optional[str] = None
     
     # Services
-    services: Optional[str] = None  # JSON string
+    services: Optional[str] = None
     service_frequency: Optional[str] = None
     service_satisfaction: Optional[str] = None
     attended_events: Optional[bool] = None
@@ -65,6 +66,18 @@ class FormDataResponse(BaseModel):
     volunteer_id: int
     household_name: Optional[str]
     address: Optional[str]
+    colony: Optional[str]
+    voter_id: Optional[str]
+    aadhar: Optional[str]
+    voter_names: Optional[str]
+    voter_ages: Optional[str]
+    voter_relation: Optional[str]
+    gender: Optional[str]
+    knows_corporator: Optional[bool]
+    satisfied_with_corporator: Optional[bool]
+    knows_politician: Optional[str]
+    supports_politician: Optional[str]
+    services: Optional[str]
     latitude: Optional[Decimal]
     longitude: Optional[Decimal]
     visit_date: Optional[date]
@@ -95,15 +108,18 @@ class DashboardSummaryResponse(BaseModel):
     total_households: int
     total_voters: int
     total_supporters: int
-    satisfaction_count: dict
+    satisfaction_count: Dict[str, int]
 
 
 class VoterDemographicsResponse(BaseModel):
-    age_groups: dict
-    gender_distribution: dict
+    age_groups: Dict[str, int]
+    gender_distribution: Dict[str, int]
 
 
-class PoliticalSupportResponse(BaseModel):
-    yes: int
-    no: int
-    neutral: int
+# ✅ FIX: Use RootModel for Pydantic V2
+class PoliticalSupportResponse(RootModel[Dict[str, int]]):
+    """
+    Dynamic political support breakdown - returns party names as keys.
+    Example: {"BRS": 10, "BJP": 15, "Congress": 8}
+    """
+    root: Dict[str, int]
