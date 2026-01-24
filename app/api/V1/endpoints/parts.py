@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
-from typing import Optional
-from sqlalchemy import String
+from sqlalchemy import or_, func, String
+from typing import Optional, Union
 
 from app.db.session import get_db
 from app.models.part import Part
@@ -11,9 +10,26 @@ from app.models.user_area import UserArea
 from app.schemas.part import PartResponse, PartsListResponse
 from app.api.deps import get_current_user
 from app.models.user import User
+from app.models.volunteer import Volunteer
 from app.core.config import settings
 
+
 router = APIRouter()
+
+
+# ✅ Helper function to get effective user ID
+def get_effective_user_id(current_user: Union[User, Volunteer]) -> int:
+    """
+    Returns the user_id to use for filtering data.
+    - If current_user is a Politician (User model): return their user_id
+    - If current_user is a Volunteer: return their politician_id (parent)
+    """
+    if hasattr(current_user, 'politician_id'):
+        # This is a Volunteer - return their parent politician's ID
+        return current_user.politician_id
+    else:
+        # This is a Politician (User) - return their own ID
+        return current_user.user_id
 
 
 # Helper function to get user's allocated area_ids
@@ -23,6 +39,8 @@ def get_user_area_ids(user_id: int, db: Session) -> list:
     return [area.area_id for area in user_areas]
 
 
+# ==================== PARTS ENDPOINTS ====================
+
 @router.get("/", response_model=PartsListResponse)
 @router.get("/constituencies", response_model=PartsListResponse)
 @router.get("/assembly-constituencies", response_model=PartsListResponse)
@@ -30,12 +48,16 @@ def get_all_parts(
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
     search: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: Union[User, Volunteer] = Depends(get_current_user),  # ✅ Accept both
     db: Session = Depends(get_db)
 ):
-    """Get all parts (constituencies) with voter counts - only from allocated areas"""
+    """Get all parts (constituencies) with voter counts - works for Politicians and Volunteers"""
+    
+    # ✅ Get effective user ID
+    effective_user_id = get_effective_user_id(current_user)
+    
     # Get user's allocated area_ids
-    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    user_area_ids = get_user_area_ids(effective_user_id, db)
     
     if not user_area_ids:
         return PartsListResponse(
@@ -96,16 +118,20 @@ def get_all_parts(
 @router.get("/{part_id}", response_model=PartResponse)
 def get_part_by_id(
     part_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: Union[User, Volunteer] = Depends(get_current_user),  # ✅ Accept both
     db: Session = Depends(get_db)
 ):
-    """Get specific part by ID - only from allocated areas"""
+    """Get specific part by ID - with access control"""
+    
+    # ✅ Get effective user ID
+    effective_user_id = get_effective_user_id(current_user)
+    
     part = db.query(Part).filter(Part.part_id == part_id).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
     
     # Check if user has access to this part's area
-    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    user_area_ids = get_user_area_ids(effective_user_id, db)
     if part.area_id not in user_area_ids:
         raise HTTPException(
             status_code=403,
@@ -129,16 +155,20 @@ def get_part_by_id(
 @router.get("/number/{part_no}", response_model=PartResponse)
 def get_part_by_number(
     part_no: int,
-    current_user: User = Depends(get_current_user),
+    current_user: Union[User, Volunteer] = Depends(get_current_user),  # ✅ Accept both
     db: Session = Depends(get_db)
 ):
-    """Get specific part by part number - only from allocated areas"""
+    """Get specific part by part number - with access control"""
+    
+    # ✅ Get effective user ID
+    effective_user_id = get_effective_user_id(current_user)
+    
     part = db.query(Part).filter(Part.part_no == part_no).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
     
     # Check if user has access to this part's area
-    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    user_area_ids = get_user_area_ids(effective_user_id, db)
     if part.area_id not in user_area_ids:
         raise HTTPException(
             status_code=403,
@@ -162,16 +192,20 @@ def get_part_by_number(
 @router.get("/{part_id}/voters", response_model=dict)
 def get_part_voter_summary(
     part_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: Union[User, Volunteer] = Depends(get_current_user),  # ✅ Accept both
     db: Session = Depends(get_db)
 ):
-    """Get voter summary for a specific part - only from allocated areas"""
+    """Get voter summary for a specific part - with access control"""
+    
+    # ✅ Get effective user ID
+    effective_user_id = get_effective_user_id(current_user)
+    
     part = db.query(Part).filter(Part.part_id == part_id).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
     
     # Check if user has access to this part's area
-    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    user_area_ids = get_user_area_ids(effective_user_id, db)
     if part.area_id not in user_area_ids:
         raise HTTPException(
             status_code=403,
@@ -206,12 +240,16 @@ def get_part_voter_summary(
 
 @router.get("/stats/overview")
 def get_parts_overview(
-    current_user: User = Depends(get_current_user),
+    current_user: Union[User, Volunteer] = Depends(get_current_user),  # ✅ Accept both
     db: Session = Depends(get_db)
 ):
-    """Get overview statistics of all parts - only from allocated areas"""
+    """Get overview statistics of all parts - respects user's assigned areas"""
+    
+    # ✅ Get effective user ID
+    effective_user_id = get_effective_user_id(current_user)
+    
     # Get user's allocated area_ids
-    user_area_ids = get_user_area_ids(current_user.user_id, db)
+    user_area_ids = get_user_area_ids(effective_user_id, db)
     
     if not user_area_ids:
         return {

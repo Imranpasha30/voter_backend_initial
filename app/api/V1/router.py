@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.V1.endpoints import auth, voters, parts, areas, volunteers, volunteer_auth, excel_upload, location  # ✅ Add location
+from app.api.V1.endpoints import auth, voters, parts, areas, volunteers, volunteer_auth, excel_upload, location ,logs   # ✅ Add location
 
 api_router = APIRouter()
 
@@ -11,3 +11,4 @@ api_router.include_router(areas.router, prefix="/areas", tags=["Areas"])
 api_router.include_router(volunteers.router, prefix="/volunteers", tags=["Volunteers"])
 api_router.include_router(parts.router, prefix="/parts", tags=["Parts"])
 api_router.include_router(voters.router, prefix="/voters", tags=["Voters"])
+api_router.include_router(logs.router, prefix="/logs", tags=["logs"]) 
