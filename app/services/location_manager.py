@@ -1,66 +1,72 @@
 """
-WebSocket Connection Manager for Real-time Location Tracking
-Handles volunteer → politician WebSocket broadcasting
+WebSocket Connection Manager
+PRODUCTION READY - Isolated politician broadcasts
 """
 
 from typing import Dict, Set
 from fastapi import WebSocket
 import logging
-import json
 
+debug_logger = logging.getLogger("websocket_debug")
 logger = logging.getLogger(__name__)
 
-
 class LocationManager:
-    """Manages WebSocket connections for real-time location tracking"""
+    """Manages WebSocket connections with strict isolation between politicians"""
     
     def __init__(self):
-        # volunteer_id → WebSocket
         self.volunteer_connections: Dict[int, WebSocket] = {}
-        
-        # politician_id → Set of WebSocket connections (multiple tabs/devices)
         self.politician_connections: Dict[int, Set[WebSocket]] = {}
+        debug_logger.info("LocationManager initialized")
     
     async def connect_volunteer(self, volunteer_id: int, websocket: WebSocket):
-        """Register volunteer WebSocket connection"""
-        # ❌ REMOVED: await websocket.accept()  # Already accepted in endpoint!
+        """Register volunteer WebSocket"""
         self.volunteer_connections[volunteer_id] = websocket
-        logger.info(f"✅ Volunteer {volunteer_id} connected (Total: {len(self.volunteer_connections)})")
+        debug_logger.info(f"Volunteer {volunteer_id} connected (Total: {len(self.volunteer_connections)})")
     
     def disconnect_volunteer(self, volunteer_id: int):
-        """Remove volunteer WebSocket connection"""
+        """Remove volunteer WebSocket"""
         if volunteer_id in self.volunteer_connections:
             del self.volunteer_connections[volunteer_id]
-            logger.info(f"🔌 Volunteer {volunteer_id} disconnected (Remaining: {len(self.volunteer_connections)})")
+            debug_logger.info(f"Volunteer {volunteer_id} disconnected (Remaining: {len(self.volunteer_connections)})")
     
     async def connect_politician(self, politician_id: int, websocket: WebSocket):
-        """Register politician WebSocket connection (supports multiple concurrent connections)"""
-        # ❌ REMOVED: await websocket.accept()  # Already accepted in endpoint!
-        
+        """Register politician WebSocket (supports multiple tabs)"""
         if politician_id not in self.politician_connections:
             self.politician_connections[politician_id] = set()
         
         self.politician_connections[politician_id].add(websocket)
-        logger.info(f"✅ Politician {politician_id} connected (Connections: {len(self.politician_connections[politician_id])})")
+        debug_logger.info(f"Politician {politician_id} connected (Connections: {len(self.politician_connections[politician_id])})")
+        debug_logger.info(f"All connected politicians: {list(self.politician_connections.keys())}")
     
     def disconnect_politician(self, politician_id: int, websocket: WebSocket):
-        """Remove politician WebSocket connection"""
+        """Remove politician WebSocket"""
         if politician_id in self.politician_connections:
             self.politician_connections[politician_id].discard(websocket)
             
             if not self.politician_connections[politician_id]:
                 del self.politician_connections[politician_id]
-                logger.info(f"🔌 Politician {politician_id} fully disconnected")
+                debug_logger.info(f"Politician {politician_id} fully disconnected")
             else:
-                logger.info(f"🔌 Politician {politician_id} one connection closed (Remaining: {len(self.politician_connections[politician_id])})")
+                debug_logger.info(f"Politician {politician_id} one connection closed (Remaining: {len(self.politician_connections[politician_id])})")
     
     async def broadcast_location_to_politician(self, politician_id: int, location_data: dict):
         """
-        Broadcast volunteer location update to all politician's connected WebSockets.
-        Removes dead connections automatically.
+        Broadcast ONLY to specified politician.
+        CRITICAL: Prevents cross-politician data leakage.
         """
+        debug_logger.info(f"BROADCAST REQUEST:")
+        debug_logger.info(f"   - Target: Politician {politician_id}")
+        debug_logger.info(f"   - Volunteer: {location_data.get('volunteer_id')}")
+        debug_logger.info(f"   - Status: {location_data.get('status')}")
+        debug_logger.info(f"   - All connected politicians: {list(self.politician_connections.keys())}")
+        
+        # SECURITY CHECK
+        other_politicians = [p for p in self.politician_connections.keys() if p != politician_id]
+        if other_politicians:
+            debug_logger.warning(f"SECURITY: Other politicians connected {other_politicians} - they will NOT receive this")
+        
         if politician_id not in self.politician_connections:
-            logger.debug(f"⚠️  No active connections for politician {politician_id}")
+            debug_logger.warning(f"Politician {politician_id} not connected - broadcast skipped")
             return
         
         message = {
@@ -69,40 +75,32 @@ class LocationManager:
         }
         
         dead_connections = set()
+        success_count = 0
         
         for websocket in self.politician_connections[politician_id]:
             try:
                 await websocket.send_json(message)
-                logger.debug(f"📤 Sent location update to politician {politician_id}")
+                success_count += 1
             except Exception as e:
-                logger.error(f"❌ Failed to send to politician {politician_id}: {e}")
+                debug_logger.error(f"Failed to send to politician {politician_id}: {e}")
                 dead_connections.add(websocket)
         
-        # Remove dead connections
+        # Cleanup dead connections
         for dead_ws in dead_connections:
             self.politician_connections[politician_id].discard(dead_ws)
         
-        # Clean up if no connections left
         if not self.politician_connections[politician_id]:
             del self.politician_connections[politician_id]
-            logger.warning(f"🗑️  All connections dead for politician {politician_id}")
-    
-    def get_active_volunteer_count(self) -> int:
-        """Get number of currently connected volunteers"""
-        return len(self.volunteer_connections)
-    
-    def get_active_politician_count(self) -> int:
-        """Get number of currently connected politicians"""
-        return len(self.politician_connections)
+        
+        debug_logger.info(f"Broadcast complete: {success_count} sent to Politician {politician_id}")
     
     def is_volunteer_connected(self, volunteer_id: int) -> bool:
-        """Check if volunteer is currently connected"""
+        """Check if volunteer is connected"""
         return volunteer_id in self.volunteer_connections
     
     def is_politician_connected(self, politician_id: int) -> bool:
-        """Check if politician has any active connections"""
+        """Check if politician is connected"""
         return politician_id in self.politician_connections
 
-
-# Global singleton instance
+# Global singleton
 location_manager = LocationManager()

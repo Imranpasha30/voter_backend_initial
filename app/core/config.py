@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     
     # Security
-    SECRET_KEY: str = "fallback-secret-key-change-in-production-min-32-chars-1234567890abcdef"
+    # ✅ CHANGED: No default value, MUST come from environment
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
     
@@ -42,10 +43,14 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
-        extra = "ignore"  # ✅ CRITICAL - Ignore extra env vars
+        extra = "ignore"  # ✅ Ignore extra env vars
+        # ✅ ADDED: Force environment variables to take priority
+        env_file_encoding = 'utf-8'
+
 
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
 
 settings = get_settings()

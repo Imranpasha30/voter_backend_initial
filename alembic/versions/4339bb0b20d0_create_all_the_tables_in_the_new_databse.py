@@ -1,8 +1,8 @@
-"""Create complete database schema
+"""Create all the tables in the new databse
 
-Revision ID: 2d567847734c
+Revision ID: 4339bb0b20d0
 Revises: 
-Create Date: 2026-01-12 17:06:37.476315
+Create Date: 2026-01-14 16:24:35.157083
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '2d567847734c'
+revision: str = '4339bb0b20d0'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -147,6 +147,25 @@ def upgrade() -> None:
     op.create_index('idx_user_areas_area_id', 'user_areas', ['area_id'], unique=False)
     op.create_index('idx_user_areas_user_id', 'user_areas', ['user_id'], unique=False)
     op.create_index(op.f('ix_user_areas_id'), 'user_areas', ['id'], unique=False)
+    op.create_table('volunteer_locations',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('volunteer_id', sa.Integer(), nullable=False),
+    sa.Column('latitude', sa.Float(), nullable=False),
+    sa.Column('longitude', sa.Float(), nullable=False),
+    sa.Column('accuracy', sa.Float(), nullable=True),
+    sa.Column('speed', sa.Float(), nullable=True),
+    sa.Column('heading', sa.Float(), nullable=True),
+    sa.Column('battery_level', sa.Integer(), nullable=True),
+    sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.ForeignKeyConstraint(['volunteer_id'], ['volunteers.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index('idx_active_locations', 'volunteer_locations', ['is_active', 'timestamp'], unique=False)
+    op.create_index('idx_volunteer_active', 'volunteer_locations', ['volunteer_id', 'is_active'], unique=False)
+    op.create_index('idx_volunteer_timestamp', 'volunteer_locations', ['volunteer_id', 'timestamp'], unique=False)
+    op.create_index(op.f('ix_volunteer_locations_id'), 'volunteer_locations', ['id'], unique=False)
+    op.create_index(op.f('ix_volunteer_locations_timestamp'), 'volunteer_locations', ['timestamp'], unique=False)
     op.create_table('family_members',
     sa.Column('member_id', sa.Integer(), nullable=False),
     sa.Column('form_data_id', sa.Integer(), nullable=False),
@@ -221,6 +240,12 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_family_members_member_id'), table_name='family_members')
     op.drop_index('idx_family_members_form_data_id', table_name='family_members')
     op.drop_table('family_members')
+    op.drop_index(op.f('ix_volunteer_locations_timestamp'), table_name='volunteer_locations')
+    op.drop_index(op.f('ix_volunteer_locations_id'), table_name='volunteer_locations')
+    op.drop_index('idx_volunteer_timestamp', table_name='volunteer_locations')
+    op.drop_index('idx_volunteer_active', table_name='volunteer_locations')
+    op.drop_index('idx_active_locations', table_name='volunteer_locations')
+    op.drop_table('volunteer_locations')
     op.drop_index(op.f('ix_user_areas_id'), table_name='user_areas')
     op.drop_index('idx_user_areas_user_id', table_name='user_areas')
     op.drop_index('idx_user_areas_area_id', table_name='user_areas')

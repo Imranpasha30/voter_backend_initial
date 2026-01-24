@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import Optional
+from sqlalchemy import String
 
 from app.db.session import get_db
 from app.models.part import Part
@@ -57,7 +58,7 @@ def get_all_parts(
             or_(
                 Part.part_name_en.ilike(f"%{search}%"),
                 Part.part_name_v1.ilike(f"%{search}%"),
-                Part.part_no.cast(db.String).ilike(f"%{search}%")
+                Part.part_no.cast(String).ilike(f"%{search}%")
             )
         )
     

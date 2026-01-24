@@ -6,13 +6,14 @@ from typing import Optional
 from app.db.session import get_db
 from app.models.voter import Voter
 from app.models.part import Part
+from app.models.user_area import UserArea
 from app.schemas.voter import (
     VoterCreate, VoterUpdate, VoterResponse, VotersListResponse
 )
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.core.config import settings
-
+from app.models.volunteer import Volunteer
 
 router = APIRouter()
 
@@ -260,3 +261,158 @@ def get_voter_statistics(
         "gender_distribution": [{"gender": g, "count": c} for g, c in gender_stats],
         "age_distribution": [{"age_group": a, "count": c} for a, c in age_stats]
     }
+
+
+
+
+# ✅ Helper function to check user access to voter
+def check_voter_access(voter: Voter, user_id: int, db: Session) -> bool:
+    """Check if user has access to this voter's area"""
+    user_area_ids = db.query(UserArea.area_id).filter(
+        UserArea.user_id == user_id
+    ).all()
+    user_area_ids = [area.area_id for area in user_area_ids]
+    
+    if not user_area_ids:
+        return False
+    
+    # Get voter's part area_id
+    part = db.query(Part).filter(Part.part_id == voter.part_id).first()
+    if not part or part.area_id not in user_area_ids:
+        return False
+    
+    return True
+
+
+# ✅ UPDATE VOTER ENDPOINT - SAFE VERSION
+@router.patch("/{epic_no}/update", response_model=VoterResponse)
+def update_voter_by_epic(
+    epic_no: str,
+    voter_update: VoterUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update voter details safely with validation and access control.
+    Only updates provided fields (partial update).
+    """
+    try:
+        # 1. Find voter
+        voter = db.query(Voter).filter(Voter.epic_no == epic_no).first()
+        if not voter:
+            raise HTTPException(status_code=404, detail="Voter not found")
+        
+        # 2. Check access control
+        if not check_voter_access(voter, current_user.user_id, db):
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied: You don't have permission to edit this voter"
+            )
+        
+        # 3. Validate part_id change (if provided)
+        update_data = voter_update.model_dump(exclude_unset=True, exclude_none=True)
+        
+        if 'part_id' in update_data:
+            new_part = db.query(Part).filter(Part.part_id == update_data['part_id']).first()
+            if not new_part:
+                raise HTTPException(status_code=404, detail="Invalid part_id")
+            
+            # Check if user has access to new part's area
+            user_area_ids = [area.area_id for area in db.query(UserArea.area_id).filter(
+                UserArea.user_id == current_user.user_id
+            ).all()]
+            
+            if new_part.area_id not in user_area_ids:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Access denied: You cannot move voter to this constituency"
+                )
+        
+        # 4. Update voter fields (only provided fields)
+        for key, value in update_data.items():
+            if hasattr(voter, key):
+                setattr(voter, key, value)
+        
+        # 5. Commit with transaction safety
+        db.commit()
+        db.refresh(voter)
+        
+        # 6. Get part information for response
+        part = db.query(Part).filter(Part.part_id == voter.part_id).first()
+        
+        # 7. Build response
+        voter_dict = {
+            **voter.__dict__,
+            'part_no': part.part_no if part else None,
+            'part_name': part.part_name_en if part else None
+        }
+        
+        return VoterResponse(**voter_dict)
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update voter: {str(e)}"
+        )
+
+
+# ✅ ALTERNATIVE: Update by voter_id
+@router.patch("/id/{voter_id}/update", response_model=VoterResponse)
+def update_voter_by_id(
+    voter_id: int,
+    voter_update: VoterUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update voter by voter_id"""
+    try:
+        voter = db.query(Voter).filter(Voter.voter_id == voter_id).first()
+        if not voter:
+            raise HTTPException(status_code=404, detail="Voter not found")
+        
+        if not check_voter_access(voter, current_user.user_id, db):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        update_data = voter_update.model_dump(exclude_unset=True, exclude_none=True)
+        
+        for key, value in update_data.items():
+            if hasattr(voter, key):
+                setattr(voter, key, value)
+        
+        db.commit()
+        db.refresh(voter)
+        
+        part = db.query(Part).filter(Part.part_id == voter.part_id).first()
+        voter_dict = {
+            **voter.__dict__,
+            'part_no': part.part_no if part else None,
+            'part_name': part.part_name_en if part else None
+        }
+        
+        return VoterResponse(**voter_dict)
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update voter: {str(e)}")
+    
+
+def get_effective_user_id(current_user, db: Session) -> int:
+    """
+    Returns the user_id to use for filtering data.
+    - If current_user is a Politician (User model): return their user_id
+    - If current_user is a Volunteer: return their politician_id (parent)
+    """
+    # Check if it's a Volunteer (they don't have user_id, they have 'id')
+    if hasattr(current_user, 'politician_id'):
+        # This is a Volunteer - return their parent politician's ID
+        return current_user.politician_id
+    else:
+        # This is a Politician (User) - return their own ID
+        return current_user.user_id

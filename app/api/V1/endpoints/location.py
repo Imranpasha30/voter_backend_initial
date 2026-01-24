@@ -1,6 +1,6 @@
 """
 Real-time Location Tracking Endpoints
-WebSocket + REST API for volunteer location tracking
+PRODUCTION READY - with real-time status updates
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, status
@@ -9,6 +9,8 @@ from typing import List, Optional
 import json
 from datetime import datetime, timedelta, timezone
 import logging
+import sys
+import asyncio
 
 from app.db.session import get_db
 from app.models.volunteer import Volunteer
@@ -20,11 +22,43 @@ from app.core.security import decode_access_token
 from app.schemas.location import LocationResponse, VolunteerLocationDetail
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
-
 
 # ========================================
-# HELPER FUNCTION: Make datetime timezone-aware
+# CONFIGURE LOGGING
+# ========================================
+
+debug_logger = logging.getLogger("websocket_debug")
+debug_logger.setLevel(logging.DEBUG)
+
+file_handler = logging.FileHandler("debug.log", mode='a', encoding='utf-8')
+file_handler.setLevel(logging.DEBUG)
+
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+
+formatter = logging.Formatter(
+    '%(asctime)s | %(levelname)-8s | %(funcName)-30s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+debug_logger.addHandler(file_handler)
+debug_logger.addHandler(console_handler)
+
+logger = logging.getLogger(__name__)
+
+# ========================================
+# CONFIGURATION CONSTANTS
+# ========================================
+
+RECENT_LOCATION_WINDOW_MINUTES = 5
+STATUS_ONLINE_THRESHOLD_SECONDS = 120  # 2 minutes
+STATUS_STALE_THRESHOLD_SECONDS = 300   # 5 minutes
+STATUS_CHECK_INTERVAL_SECONDS = 30     # Check every 30 seconds
+
+# ========================================
+# HELPER FUNCTIONS
 # ========================================
 
 def make_aware(dt: datetime) -> datetime:
@@ -33,6 +67,87 @@ def make_aware(dt: datetime) -> datetime:
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
+def determine_volunteer_status(
+    location_timestamp: datetime,
+    volunteer_id: int,
+    current_time: datetime = None
+) -> str:
+    """
+    Determine volunteer status based on WebSocket connection AND last location time.
+    WebSocket connection takes priority over timestamp.
+    """
+    if current_time is None:
+        current_time = datetime.now(timezone.utc)
+    
+    # PRIORITY 1: Check WebSocket connection (most accurate)
+    is_connected = location_manager.is_volunteer_connected(volunteer_id)
+    
+    if is_connected:
+        return "online"
+    
+    # PRIORITY 2: Check timestamp if not connected
+    location_timestamp = make_aware(location_timestamp)
+    time_diff = (current_time - location_timestamp).total_seconds()
+    
+    if time_diff < STATUS_ONLINE_THRESHOLD_SECONDS:
+        return "online"  # Just disconnected, might reconnect
+    elif time_diff < STATUS_STALE_THRESHOLD_SECONDS:
+        return "stale"
+    else:
+        return "offline"
+
+def get_volunteer_current_status(volunteer_id: int, db: Session) -> dict:
+    """
+    Get current status of a volunteer with latest location.
+    Returns status dict with all necessary info.
+    """
+    volunteer = db.query(Volunteer).filter(Volunteer.id == volunteer_id).first()
+    if not volunteer:
+        return None
+    
+    now = datetime.now(timezone.utc)
+    recent_threshold = now - timedelta(minutes=RECENT_LOCATION_WINDOW_MINUTES)
+    
+    # Get latest location within recent window
+    recent_location = db.query(VolunteerLocation).filter(
+        VolunteerLocation.volunteer_id == volunteer_id,
+        VolunteerLocation.timestamp >= recent_threshold
+    ).order_by(VolunteerLocation.timestamp.desc()).first()
+    
+    if recent_location:
+        location_timestamp = make_aware(recent_location.timestamp)
+        vol_status = determine_volunteer_status(location_timestamp, volunteer_id, now)
+        
+        return {
+            "volunteer_id": volunteer.id,
+            "volunteer_name": volunteer.username,
+            "volunteer_email": volunteer.email,
+            "latitude": float(recent_location.latitude),
+            "longitude": float(recent_location.longitude),
+            "accuracy": float(recent_location.accuracy) if recent_location.accuracy else None,
+            "speed": float(recent_location.speed) if recent_location.speed else None,
+            "heading": float(recent_location.heading) if recent_location.heading else None,
+            "battery_level": recent_location.battery_level,
+            "timestamp": location_timestamp.isoformat(),
+            "status": vol_status,
+            "is_active": recent_location.is_active
+        }
+    else:
+        # No recent location - offline
+        return {
+            "volunteer_id": volunteer.id,
+            "volunteer_name": volunteer.username,
+            "volunteer_email": volunteer.email,
+            "latitude": None,
+            "longitude": None,
+            "accuracy": None,
+            "speed": None,
+            "heading": None,
+            "battery_level": None,
+            "timestamp": None,
+            "status": "offline",
+            "is_active": False
+        }
 
 # ========================================
 # WEBSOCKET: VOLUNTEER → BACKEND
@@ -46,23 +161,53 @@ async def volunteer_location_stream(
 ):
     """
     WebSocket endpoint for volunteers to send real-time location updates.
-    Updates every 30 seconds for battery optimization.
     """
     politician_id = None
     volunteer = None
     
+    debug_logger.info("=" * 100)
+    debug_logger.info(f"VOLUNTEER WEBSOCKET CONNECTION ATTEMPT")
+    debug_logger.info("=" * 100)
+    debug_logger.info(f"Volunteer ID: {volunteer_id}")
+    debug_logger.info(f"Timestamp: {datetime.now(timezone.utc).isoformat()}")
+    
     try:
-        # STEP 1: Verify volunteer exists
-        volunteer = db.query(Volunteer).filter(Volunteer.id == volunteer_id).first()
+        # STEP 1: Verify volunteer exists and is active
+        volunteer = db.query(Volunteer).filter(
+            Volunteer.id == volunteer_id,
+            Volunteer.is_active == True
+        ).first()
+        
         if not volunteer:
-            await websocket.close(code=4004, reason="Volunteer not found")
+            debug_logger.error(f"Volunteer {volunteer_id} NOT FOUND or INACTIVE")
+            await websocket.close(code=4004, reason="Volunteer not found or inactive")
             return
         
         politician_id = volunteer.politician_id
         
+        debug_logger.info(f"Volunteer FOUND:")
+        debug_logger.info(f"   - Volunteer ID: {volunteer.id}")
+        debug_logger.info(f"   - Volunteer Name: {volunteer.username}")
+        debug_logger.info(f"   - BELONGS TO POLITICIAN ID: {politician_id}")
+        
+        # Verify politician is active
+        politician = db.query(User).filter(
+            User.user_id == politician_id,
+            User.is_active == True
+        ).first()
+        
+        if not politician:
+            debug_logger.error(f"Politician {politician_id} NOT FOUND or INACTIVE")
+            await websocket.close(code=4003, reason="Politician account inactive")
+            return
+        
+        debug_logger.info(f"Politician Details:")
+        debug_logger.info(f"   - Politician ID: {politician.user_id}")
+        debug_logger.info(f"   - Politician Name: {politician.full_name}")
+        
         # STEP 2: Accept WebSocket
         await websocket.accept()
-        logger.info(f"✅ Volunteer {volunteer_id} WebSocket accepted")
+        debug_logger.info(f"Volunteer {volunteer_id} WebSocket ACCEPTED")
         
         # STEP 3: Register with location manager
         await location_manager.connect_volunteer(volunteer_id, websocket)
@@ -71,11 +216,11 @@ async def volunteer_location_stream(
         await websocket.send_json({
             "status": "connected",
             "volunteer_id": volunteer_id,
-            "message": "Location tracking started ✅",
+            "message": "Location tracking started",
             "update_interval_seconds": 30
         })
         
-        # ✅ STEP 5: BROADCAST ONLINE STATUS IMMEDIATELY
+        # STEP 5: Broadcast ONLINE status
         last_location = db.query(VolunteerLocation).filter(
             VolunteerLocation.volunteer_id == volunteer_id
         ).order_by(VolunteerLocation.timestamp.desc()).first()
@@ -88,7 +233,6 @@ async def volunteer_location_stream(
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
-        # Include last known location if exists
         if last_location:
             online_broadcast.update({
                 "latitude": float(last_location.latitude),
@@ -99,13 +243,18 @@ async def volunteer_location_stream(
                 "battery_level": last_location.battery_level,
             })
         
+        debug_logger.info(f"BROADCASTING ONLINE STATUS:")
+        debug_logger.info(f"   - FROM: Volunteer {volunteer_id}")
+        debug_logger.info(f"   - TO: Politician {politician_id} ONLY")
+        
         await location_manager.broadcast_location_to_politician(
             politician_id,
             online_broadcast
         )
-        logger.info(f"📤 Broadcast ONLINE status for volunteer {volunteer_id} to politician {politician_id}")
         
         # STEP 6: Listen for location updates
+        debug_logger.info(f"Listening for location updates from volunteer {volunteer_id}...")
+        
         while True:
             data = await websocket.receive_text()
             
@@ -116,7 +265,9 @@ async def volunteer_location_stream(
             try:
                 location_json = json.loads(data)
                 
-                logger.info(f"📍 Location from volunteer {volunteer_id}: ({location_json.get('latitude')}, {location_json.get('longitude')})")
+                debug_logger.info(f"LOCATION UPDATE RECEIVED:")
+                debug_logger.info(f"   - Volunteer ID: {volunteer_id}")
+                debug_logger.info(f"   - Lat/Lng: ({location_json.get('latitude')}, {location_json.get('longitude')})")
                 
                 # Mark previous locations as inactive
                 db.query(VolunteerLocation).filter(
@@ -139,6 +290,8 @@ async def volunteer_location_stream(
                 db.commit()
                 db.refresh(location)
                 
+                debug_logger.info(f"Location saved to database (ID: {location.id})")
+                
                 # Broadcast to politician's dashboard
                 broadcast_data = {
                     "volunteer_id": volunteer_id,
@@ -154,6 +307,8 @@ async def volunteer_location_stream(
                     "status": "online"
                 }
                 
+                debug_logger.info(f"BROADCASTING to Politician {politician_id} ONLY")
+                
                 await location_manager.broadcast_location_to_politician(
                     politician_id, 
                     broadcast_data
@@ -166,25 +321,25 @@ async def volunteer_location_stream(
                 })
                 
             except json.JSONDecodeError as e:
-                logger.error(f"❌ Invalid JSON from volunteer {volunteer_id}: {e}")
+                debug_logger.error(f"Invalid JSON from volunteer {volunteer_id}: {e}")
                 await websocket.send_json({"error": "Invalid JSON format"})
             except Exception as e:
-                logger.error(f"❌ Error processing location: {e}")
+                debug_logger.error(f"Error processing location: {e}")
                 import traceback
-                traceback.print_exc()
+                debug_logger.error(traceback.format_exc())
                 db.rollback()
             
     except WebSocketDisconnect:
-        logger.info(f"🔌 Volunteer {volunteer_id} WebSocket disconnected")
+        debug_logger.info(f"Volunteer {volunteer_id} WebSocket DISCONNECTED")
     
     except Exception as e:
-        logger.error(f"❌ Error in volunteer {volunteer_id} location stream: {e}")
+        debug_logger.error(f"CRITICAL ERROR in volunteer {volunteer_id}: {e}")
         import traceback
-        traceback.print_exc()
+        debug_logger.error(traceback.format_exc())
     
     finally:
-        # ✅ ALWAYS CLEANUP AND BROADCAST OFFLINE STATUS
-        logger.info(f"🧹 Cleaning up volunteer {volunteer_id}")
+        # CLEANUP
+        debug_logger.info(f"CLEANUP for volunteer {volunteer_id}")
         location_manager.disconnect_volunteer(volunteer_id)
         
         try:
@@ -195,13 +350,12 @@ async def volunteer_location_stream(
             ).update({"is_active": False}, synchronize_session=False)
             db.commit()
         except Exception as e:
-            logger.error(f"❌ Error updating location status: {e}")
+            debug_logger.error(f"Error updating location status: {e}")
             db.rollback()
         
-        # ✅ BROADCAST OFFLINE STATUS TO POLITICIAN
+        # Broadcast OFFLINE status
         if politician_id and volunteer:
             try:
-                # Get last known location
                 last_location = db.query(VolunteerLocation).filter(
                     VolunteerLocation.volunteer_id == volunteer_id
                 ).order_by(VolunteerLocation.timestamp.desc()).first()
@@ -214,7 +368,6 @@ async def volunteer_location_stream(
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 
-                # Include last known location if exists
                 if last_location:
                     offline_broadcast.update({
                         "latitude": float(last_location.latitude),
@@ -225,16 +378,18 @@ async def volunteer_location_stream(
                         "battery_level": last_location.battery_level,
                     })
                 
+                debug_logger.info(f"BROADCASTING OFFLINE to Politician {politician_id}")
+                
                 await location_manager.broadcast_location_to_politician(
                     politician_id,
                     offline_broadcast
                 )
-                logger.info(f"📤 Broadcast OFFLINE status for volunteer {volunteer_id} to politician {politician_id}")
             except Exception as e:
-                logger.error(f"❌ Error broadcasting offline status: {e}")
-                import traceback
-                traceback.print_exc()
-
+                debug_logger.error(f"Error broadcasting offline status: {e}")
+        
+        debug_logger.info("=" * 100)
+        debug_logger.info(f"VOLUNTEER {volunteer_id} SESSION ENDED")
+        debug_logger.info("=" * 100)
 
 # ========================================
 # WEBSOCKET: BACKEND → POLITICIAN DASHBOARD
@@ -247,157 +402,218 @@ async def politician_location_dashboard(
     db: Session = Depends(get_db)
 ):
     """
-    WebSocket endpoint for politician dashboard to receive all volunteer locations.
-    Real-time updates with no polling required.
+    WebSocket endpoint for politician dashboard.
+    Includes periodic status checks to detect offline volunteers.
     """
     politician_id = None
     connection_accepted = False
+    status_check_task = None
+    
+    debug_logger.info("")
+    debug_logger.info("=" * 100)
+    debug_logger.info(f"POLITICIAN WEBSOCKET CONNECTION ATTEMPT")
+    debug_logger.info("=" * 100)
+    debug_logger.info(f"Timestamp: {datetime.now(timezone.utc).isoformat()}")
+    
+    async def periodic_status_check():
+        """
+        Background task to check volunteer statuses periodically.
+        Detects when volunteers go offline without explicit disconnect.
+        """
+        while True:
+            try:
+                await asyncio.sleep(STATUS_CHECK_INTERVAL_SECONDS)
+                
+                debug_logger.debug(f"Periodic status check for Politician {politician_id}")
+                
+                # Get all volunteers for this politician
+                volunteers = db.query(Volunteer).filter(
+                    Volunteer.politician_id == politician_id,
+                    Volunteer.is_active == True
+                ).all()
+                
+                status_updates = []
+                
+                for volunteer in volunteers:
+                    # Get current status
+                    current_status = get_volunteer_current_status(volunteer.id, db)
+                    if current_status:
+                        status_updates.append(current_status)
+                
+                # Send status update to politician
+                if status_updates:
+                    status_message = {
+                        "type": "status_sync",
+                        "volunteers": status_updates,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    
+                    try:
+                        await websocket.send_json(status_message)
+                        debug_logger.debug(f"Status sync sent to Politician {politician_id}: {len(status_updates)} volunteers")
+                    except Exception as e:
+                        debug_logger.error(f"Failed to send status sync: {e}")
+                        break
+                        
+            except asyncio.CancelledError:
+                debug_logger.info(f"Status check task cancelled for Politician {politician_id}")
+                break
+            except Exception as e:
+                debug_logger.error(f"Error in periodic status check: {e}")
     
     try:
-        # STEP 1: Validate JWT token BEFORE accepting WebSocket
+        # STEP 1: Validate JWT token
         payload = decode_access_token(token)
         if payload is None:
-            logger.error("❌ Invalid JWT token")
+            debug_logger.error("Invalid JWT token")
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
             return
         
         user_email = payload.get("sub")
+        
         if not user_email:
-            logger.error("❌ No email in JWT payload")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token payload")
+            debug_logger.error("No email in JWT payload")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token")
             return
         
         # STEP 2: Query user by EMAIL
-        user = db.query(User).filter(User.email == user_email).first()
+        user = db.query(User).filter(
+            User.email == user_email,
+            User.is_active == True
+        ).first()
+        
         if not user:
-            logger.error(f"❌ User not found for email: {user_email}")
+            debug_logger.error(f"User NOT FOUND or INACTIVE for email: {user_email}")
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
             return
         
         politician_id = user.user_id
         
+        debug_logger.info(f"Politician FOUND:")
+        debug_logger.info(f"   - POLITICIAN ID: {politician_id}")
+        debug_logger.info(f"   - Email: {user.email}")
+        debug_logger.info(f"   - Full Name: {user.full_name}")
+        
         # STEP 3: Accept WebSocket
         await websocket.accept()
         connection_accepted = True
-        logger.info(f"✅ Politician {politician_id} ({user_email}) WebSocket ACCEPTED")
+        debug_logger.info(f"Politician {politician_id} WebSocket ACCEPTED")
         
         # STEP 4: Register with location manager
         await location_manager.connect_politician(politician_id, websocket)
         
-        # STEP 5: Get all volunteers
+        # STEP 5: Get ONLY this politician's volunteers
+        debug_logger.info(f"Fetching volunteers FOR POLITICIAN {politician_id} ONLY...")
+        
         volunteers = db.query(Volunteer).filter(
-            Volunteer.politician_id == politician_id
+            Volunteer.politician_id == politician_id,
+            Volunteer.is_active == True
         ).all()
         
-        # STEP 6: Build initial location state (ALL volunteers)
+        debug_logger.info(f"Found {len(volunteers)} volunteer(s) for Politician {politician_id}")
+        
+        # STEP 6: Build initial state
         active_locations = []
-        now = datetime.now(timezone.utc)
         
         for volunteer in volunteers:
-            # Get LATEST location (no time limit)
-            recent_location = db.query(VolunteerLocation).filter(
-                VolunteerLocation.volunteer_id == volunteer.id
-            ).order_by(VolunteerLocation.timestamp.desc()).first()
-            
-            if recent_location:
-                location_timestamp = make_aware(recent_location.timestamp)
-                time_diff = (now - location_timestamp).total_seconds()
-                
-                # Determine status based on time difference
-                if time_diff < 120:
-                    vol_status = "online"
-                elif time_diff < 300:
-                    vol_status = "stale"
-                else:
-                    vol_status = "offline"
-                
-                # ✅ Override with real-time connection status
-                if location_manager.is_volunteer_connected(volunteer.id):
-                    vol_status = "online"
-                
-                active_locations.append({
-                    "volunteer_id": volunteer.id,
-                    "volunteer_name": volunteer.username,
-                    "volunteer_email": volunteer.email,
-                    "latitude": float(recent_location.latitude),
-                    "longitude": float(recent_location.longitude),
-                    "accuracy": float(recent_location.accuracy) if recent_location.accuracy else None,
-                    "speed": float(recent_location.speed) if recent_location.speed else None,
-                    "heading": float(recent_location.heading) if recent_location.heading else None,
-                    "battery_level": recent_location.battery_level,
-                    "timestamp": location_timestamp.isoformat(),
-                    "status": vol_status,
-                    "is_active": recent_location.is_active
-                })
-            else:
-                # Never tracked
-                active_locations.append({
-                    "volunteer_id": volunteer.id,
-                    "volunteer_name": volunteer.username,
-                    "volunteer_email": volunteer.email,
-                    "latitude": None,
-                    "longitude": None,
-                    "accuracy": None,
-                    "speed": None,
-                    "heading": None,
-                    "battery_level": None,
-                    "timestamp": None,
-                    "status": "never_tracked",
-                    "is_active": False
-                })
+            status_data = get_volunteer_current_status(volunteer.id, db)
+            if status_data:
+                active_locations.append(status_data)
+                debug_logger.info(f"   - Volunteer {volunteer.id}: {status_data['status']}")
         
         # STEP 7: Send initial state
+        now = datetime.now(timezone.utc)
         initial_message = {
             "type": "initial_state",
             "volunteers": active_locations,
             "count": len([v for v in active_locations if v['latitude'] is not None]),
             "total_volunteers": len(volunteers),
-            "server_time": now.isoformat()
+            "server_time": now.isoformat(),
+            "politician_id": politician_id,
+            "recent_window_minutes": RECENT_LOCATION_WINDOW_MINUTES,
+            "status_check_interval": STATUS_CHECK_INTERVAL_SECONDS
         }
         
-        await websocket.send_json(initial_message)
-        logger.info(f"📤 Sent {len(active_locations)}/{len(volunteers)} locations to politician {politician_id}")
+        debug_logger.info(f"SENDING INITIAL STATE to Politician {politician_id}:")
+        debug_logger.info(f"   - Total volunteers: {len(volunteers)}")
+        debug_logger.info(f"   - With recent locations: {initial_message['count']}")
         
-        # STEP 8: Keep connection alive
+        await websocket.send_json(initial_message)
+        debug_logger.info(f"Initial state sent successfully")
+        
+        # STEP 8: Start periodic status check task
+        status_check_task = asyncio.create_task(periodic_status_check())
+        debug_logger.info(f"Started periodic status check (every {STATUS_CHECK_INTERVAL_SECONDS}s)")
+        
+        # STEP 9: Keep connection alive
+        debug_logger.info(f"Listening for messages from Politician {politician_id}...")
+        
         while True:
             try:
                 message = await websocket.receive_text()
                 
                 if message == "ping":
                     await websocket.send_text("pong")
-                    logger.debug(f"🏓 Pong sent to politician {politician_id}")
+                elif message == "refresh":
+                    # Manual refresh request
+                    debug_logger.info(f"Manual refresh requested by Politician {politician_id}")
+                    refresh_data = []
+                    for volunteer in volunteers:
+                        status_data = get_volunteer_current_status(volunteer.id, db)
+                        if status_data:
+                            refresh_data.append(status_data)
+                    
+                    await websocket.send_json({
+                        "type": "status_sync",
+                        "volunteers": refresh_data,
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    })
                 else:
-                    logger.warning(f"⚠️  Unknown message from politician {politician_id}: {message}")
+                    debug_logger.warning(f"Unknown message from politician {politician_id}: {message}")
                     
             except WebSocketDisconnect:
-                logger.info(f"🔌 Politician {politician_id} WebSocket disconnected gracefully")
+                debug_logger.info(f"Politician {politician_id} disconnected gracefully")
                 break
             except Exception as e:
-                logger.error(f"❌ Error in politician {politician_id} message loop: {e}")
+                debug_logger.error(f"Error in politician {politician_id} message loop: {e}")
                 break
                 
     except WebSocketDisconnect:
-        logger.info(f"🔌 Politician {politician_id or 'unknown'} disconnected before setup complete")
+        debug_logger.info(f"Politician {politician_id or 'unknown'} disconnected before setup")
     
     except Exception as e:
-        logger.error(f"❌ CRITICAL ERROR in politician {politician_id or 'unknown'} WebSocket: {e}")
+        debug_logger.error(f"CRITICAL ERROR in politician {politician_id or 'unknown'}: {e}")
         import traceback
-        traceback.print_exc()
+        debug_logger.error(traceback.format_exc())
         
         if connection_accepted:
             try:
-                await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason="Internal server error")
+                await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
             except:
                 pass
     
     finally:
+        # Cancel status check task
+        if status_check_task:
+            status_check_task.cancel()
+            try:
+                await status_check_task
+            except asyncio.CancelledError:
+                pass
+        
         if politician_id:
             location_manager.disconnect_politician(politician_id, websocket)
-            logger.info(f"🧹 Cleanup complete for politician {politician_id}")
+            debug_logger.info(f"Cleanup complete for politician {politician_id}")
+        
+        debug_logger.info("=" * 100)
+        debug_logger.info(f"POLITICIAN {politician_id or 'unknown'} SESSION ENDED")
+        debug_logger.info("=" * 100)
 
+# [REST API endpoints remain the same as before]
+# ... (all REST endpoints from previous code)
 
 # ========================================
-# REST API: GET ACTIVE LOCATIONS (Fallback)
+# REST API: GET ACTIVE LOCATIONS
 # ========================================
 
 @router.get("/volunteers/locations/active", response_model=List[VolunteerLocationDetail])
@@ -405,28 +621,31 @@ def get_active_volunteer_locations(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get current locations of all active volunteers (REST fallback)"""
+    """
+    Get current locations of active volunteers (REST fallback).
+    ONLY returns THIS politician's volunteers with RECENT locations.
+    """
+    debug_logger.info(f"REST API: GET /volunteers/locations/active")
+    debug_logger.info(f"   - Politician ID: {current_user.user_id}")
+    
     volunteers = db.query(Volunteer).filter(
-        Volunteer.politician_id == current_user.user_id
+        Volunteer.politician_id == current_user.user_id,
+        Volunteer.is_active == True
     ).all()
     
     locations = []
     now = datetime.now(timezone.utc)
+    recent_threshold = now - timedelta(minutes=RECENT_LOCATION_WINDOW_MINUTES)
     
     for volunteer in volunteers:
         latest = db.query(VolunteerLocation).filter(
-            VolunteerLocation.volunteer_id == volunteer.id
+            VolunteerLocation.volunteer_id == volunteer.id,
+            VolunteerLocation.timestamp >= recent_threshold  # CRITICAL: Recent only
         ).order_by(VolunteerLocation.timestamp.desc()).first()
         
-        if latest and make_aware(latest.timestamp) >= now - timedelta(minutes=5):
-            time_diff = (now - make_aware(latest.timestamp)).total_seconds()
-            
-            if time_diff < 120:
-                vol_status = "online"
-            elif time_diff < 300:
-                vol_status = "stale"
-            else:
-                vol_status = "offline"
+        if latest:
+            location_timestamp = make_aware(latest.timestamp)
+            vol_status = determine_volunteer_status(location_timestamp, volunteer.id, now)
             
             locations.append(VolunteerLocationDetail(
                 volunteer_id=volunteer.id,
@@ -442,8 +661,8 @@ def get_active_volunteer_locations(
                 status=vol_status
             ))
     
+    debug_logger.info(f"   - Returning {len(locations)} active location(s)")
     return locations
-
 
 # ========================================
 # REST API: GET LOCATION HISTORY
@@ -456,13 +675,16 @@ def get_volunteer_location_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get location history for a specific volunteer"""
+    """Get location history for a specific volunteer (SECURITY: Only if they belong to current user)"""
+    
+    # SECURITY CHECK: Verify volunteer belongs to this politician
     volunteer = db.query(Volunteer).filter(
         Volunteer.id == volunteer_id,
         Volunteer.politician_id == current_user.user_id
     ).first()
     
     if not volunteer:
+        debug_logger.error(f"SECURITY: Politician {current_user.user_id} tried to access Volunteer {volunteer_id} (unauthorized)")
         raise HTTPException(status_code=404, detail="Volunteer not found")
     
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
@@ -472,11 +694,12 @@ def get_volunteer_location_history(
         VolunteerLocation.timestamp >= since
     ).order_by(VolunteerLocation.timestamp.asc()).all()
     
+    debug_logger.info(f"Politician {current_user.user_id} accessed history for Volunteer {volunteer_id}: {len(locations)} records")
+    
     return locations
 
-
 # ========================================
-# REST API: TOGGLE TRACKING
+# REST API: STOP TRACKING
 # ========================================
 
 @router.post("/volunteers/{volunteer_id}/location/stop")
@@ -485,7 +708,9 @@ def stop_location_tracking(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Stop location tracking for a volunteer"""
+    """Stop location tracking (SECURITY: Only for own volunteers)"""
+    
+    # SECURITY CHECK
     volunteer = db.query(Volunteer).filter(
         Volunteer.id == volunteer_id,
         Volunteer.politician_id == current_user.user_id
@@ -494,20 +719,21 @@ def stop_location_tracking(
     if not volunteer:
         raise HTTPException(status_code=404, detail="Volunteer not found")
     
-    # Mark all locations as inactive
-    db.query(VolunteerLocation).filter(
+    # Mark locations inactive
+    updated_count = db.query(VolunteerLocation).filter(
         VolunteerLocation.volunteer_id == volunteer_id
     ).update({"is_active": False}, synchronize_session=False)
     db.commit()
     
-    # Disconnect volunteer WebSocket if active
+    # Disconnect WebSocket
     location_manager.disconnect_volunteer(volunteer_id)
+    
+    debug_logger.info(f"Politician {current_user.user_id} stopped tracking for Volunteer {volunteer_id}")
     
     return {
         "success": True,
         "message": f"Location tracking stopped for {volunteer.username}"
     }
-
 
 # ========================================
 # REST API: GET VOLUNTEER STATUS
@@ -519,7 +745,9 @@ def get_volunteer_location_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get current location status of a volunteer"""
+    """Get volunteer status (SECURITY: Only for own volunteers)"""
+    
+    # SECURITY CHECK
     volunteer = db.query(Volunteer).filter(
         Volunteer.id == volunteer_id,
         Volunteer.politician_id == current_user.user_id
@@ -528,30 +756,25 @@ def get_volunteer_location_status(
     if not volunteer:
         raise HTTPException(status_code=404, detail="Volunteer not found")
     
-    # Get latest location
+    # Get latest RECENT location
+    now = datetime.now(timezone.utc)
+    recent_threshold = now - timedelta(minutes=RECENT_LOCATION_WINDOW_MINUTES)
+    
     latest = db.query(VolunteerLocation).filter(
-        VolunteerLocation.volunteer_id == volunteer_id
+        VolunteerLocation.volunteer_id == volunteer_id,
+        VolunteerLocation.timestamp >= recent_threshold
     ).order_by(VolunteerLocation.timestamp.desc()).first()
     
     if not latest:
         return {
             "volunteer_id": volunteer_id,
             "volunteer_name": volunteer.username,
-            "status": "never_tracked",
+            "status": "offline",
             "is_tracking": False
         }
     
-    now = datetime.now(timezone.utc)
     location_timestamp = make_aware(latest.timestamp)
-    time_diff = (now - location_timestamp).total_seconds()
-    
-    # Determine status
-    if time_diff < 120:
-        vol_status = "online"
-    elif time_diff < 300:
-        vol_status = "stale"
-    else:
-        vol_status = "offline"
+    vol_status = determine_volunteer_status(location_timestamp, volunteer_id, now)
     
     return {
         "volunteer_id": volunteer_id,
