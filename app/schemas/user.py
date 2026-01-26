@@ -1,11 +1,13 @@
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
 from datetime import datetime
-from app.core.config import settings  # ✅ FIXED
+from app.core.config import settings
+
 
 class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
+
 
 class UserCreate(UserBase):
     password: str
@@ -16,6 +18,7 @@ class UserCreate(UserBase):
         if len(v) < settings.PASSWORD_MIN_LENGTH:
             raise ValueError(f'Password must be at least {settings.PASSWORD_MIN_LENGTH} characters')
         return v
+
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -31,18 +34,22 @@ class UserLogin(BaseModel):
             raise ValueError(f'Phone must not exceed {settings.PHONE_MAX_LENGTH} digits')
         return v
 
+
 class UserResponse(UserBase):
     user_id: int
     is_active: bool
+    profile_image_url: Optional[str] = None  # ✅ NEW: Include in response (read-only for users)
     created_at: datetime
     last_login: Optional[datetime] = None
     
     class Config:
         from_attributes = True
 
+
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     password: Optional[str] = None
+
 
 class LoginResponse(BaseModel):
     user: UserResponse

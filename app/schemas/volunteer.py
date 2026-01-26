@@ -24,6 +24,10 @@ class VolunteerResponse(BaseModel):
     is_active: bool
     created_at: datetime
     
+    # ✅ NEW: Politician details
+    politician_name: Optional[str] = None
+    politician_profile_image_url: Optional[str] = None
+    
     class Config:
         from_attributes = True
 

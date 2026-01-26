@@ -93,12 +93,25 @@ class MapPinResponse(BaseModel):
     volunteer_name: Optional[str]
     household_name: Optional[str]
     address: Optional[str]
-    services: Optional[str]
+    colony: Optional[str]
+    area: Optional[str]
+    services_received: Optional[str]  # ✅ Match DB column
     image_url: Optional[str]
     person_image_url: Optional[str]
     latitude: Decimal
     longitude: Decimal
     visit_date: Optional[date]
+    
+    # ✅ NEW: Additional fields
+    mobile_number: Optional[str]
+    caste: Optional[str]
+    religion: Optional[str]
+    gender: Optional[str]
+    current_party_support: Optional[str]
+    favourite_party: Optional[str]
+    satisfaction_with_corporator: Optional[str]
+    satisfaction_with_service: Optional[str]
+    family_members_count: Optional[int]
     
     class Config:
         from_attributes = True

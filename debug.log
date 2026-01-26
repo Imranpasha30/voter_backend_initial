@@ -3436,3 +3436,407 @@ RuntimeError: WebSocket is not connected. Need to call "accept" first.
 2026-01-14 16:12:06 | INFO     | volunteer_location_stream      | ====================================================================================================
 2026-01-14 16:12:06 | INFO     | volunteer_location_stream      | VOLUNTEER 2 SESSION ENDED
 2026-01-14 16:12:06 | INFO     | volunteer_location_stream      | ====================================================================================================
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | 
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T05:50:38.406139+00:00
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 11:20:38 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 11:20:38 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 11:20:38 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 11:21:08 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 11:21:08 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 11:21:38 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 11:21:38 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 11:22:08 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 11:22:08 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 11:22:38 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 11:22:38 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 11:23:08 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 11:23:08 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 11:23:24 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 11:23:24 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 11:23:24 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 11:23:24 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 11:23:24 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:24 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 11:23:24 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | 
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T05:53:26.293444+00:00
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 11:23:26 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 11:23:26 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 11:23:26 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 11:23:36 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 11:23:36 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 11:23:36 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 11:23:36 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 11:23:36 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:36 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 11:23:36 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | 
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T05:53:38.423138+00:00
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 11:23:38 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 11:23:38 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 11:23:38 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 11:23:46 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 11:23:46 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 11:23:46 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 11:23:46 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 11:23:46 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 11:23:46 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 11:23:46 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:40:31.656709+00:00
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:10:31 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:10:31 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:10:31 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:11:01 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:11:01 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:11:31 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:11:31 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:12:01 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:12:01 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:12:31 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:12:31 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:13:01 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:13:01 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:13:31 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:13:31 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:14:01 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:14:01 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:14:07 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:14:07 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:14:07 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:14:07 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:14:07 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:14:07 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:14:07 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:54:35.289063+00:00
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:24:35 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:24:35 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:24:35 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:25:05 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:25:05 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:25:35 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:25:35 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:26:05 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:26:05 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:26:35 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:26:35 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:27:05 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:27:05 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:27:35 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:27:35 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:28:05 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:28:05 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:28:24 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:28:24 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:28:24 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:28:24 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:28:24 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:24 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:28:24 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:58:27.003558+00:00
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:28:27 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:28:27 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:28:27 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:28:28 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:28:28 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:28:28 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:28:28 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:28:28 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:28 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:28:28 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:58:30.640856+00:00
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:28:30 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:28:30 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:28:30 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:28:35 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:28:35 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:28:35 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:28:35 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:28:35 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:35 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:28:35 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:58:37.054018+00:00
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:28:37 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:28:37 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:28:37 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:28:53 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:28:53 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:28:53 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:28:53 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:28:53 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:53 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:28:53 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:58:55.949332+00:00
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:28:55 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:28:55 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:28:55 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:29:00 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:29:00 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:29:00 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:29:00 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:29:00 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:00 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:29:00 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:59:03.001231+00:00
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:29:03 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:29:03 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:29:03 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:29:04 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:29:04 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:29:04 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:29:04 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:29:04 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:04 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:29:04 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:59:07.877666+00:00
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:29:07 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:29:07 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:29:07 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:29:33 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:29:33 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:29:33 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:29:33 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:29:33 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:33 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:29:33 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:59:35.811889+00:00
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:29:35 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:29:35 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:29:35 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:29:40 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:29:40 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:29:40 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:29:40 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:29:40 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:40 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:29:40 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | 
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Timestamp: 2026-01-26T06:59:42.595510+00:00
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 3
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Politician 3 WebSocket ACCEPTED
+2026-01-26 12:29:42 | INFO     | connect_politician             | Politician 3 connected (Connections: 1)
+2026-01-26 12:29:42 | INFO     | connect_politician             | All connected politicians: [3]
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 3 ONLY...
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 3
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  |    - Volunteer 3: offline
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 3:
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-01-26 12:29:42 | INFO     | politician_location_dashboard  | Listening for messages from Politician 3...
+2026-01-26 12:30:12 | DEBUG    | periodic_status_check          | Periodic status check for Politician 3
+2026-01-26 12:30:12 | DEBUG    | periodic_status_check          | Status sync sent to Politician 3: 1 volunteers
+2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | Politician 3 disconnected gracefully
+2026-01-26 12:30:25 | INFO     | periodic_status_check          | Status check task cancelled for Politician 3
+2026-01-26 12:30:25 | INFO     | disconnect_politician          | Politician 3 fully disconnected
+2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | Cleanup complete for politician 3
+2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
+2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | ====================================================================================================
