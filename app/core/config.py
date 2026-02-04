@@ -1,10 +1,12 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
+
 
 class Settings(BaseSettings):
     # App
@@ -40,6 +42,12 @@ class Settings(BaseSettings):
     PHONE_MIN_LENGTH: int = 10
     PHONE_MAX_LENGTH: int = 15
     
+    # ImageKit Configuration (Optional - set empty strings as default)
+    IMAGEKIT_PUBLIC_KEY: Optional[str] = ""
+    IMAGEKIT_PRIVATE_KEY: Optional[str] = ""
+    IMAGEKIT_URL_ENDPOINT: Optional[str] = ""
+    IMAGEKIT_FOLDER_PATH: str = "/voter_connect_images/voter_card"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
@@ -48,9 +56,11 @@ class Settings(BaseSettings):
         env_file_encoding = 'utf-8'
 
 
+
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
 
 
 settings = get_settings()

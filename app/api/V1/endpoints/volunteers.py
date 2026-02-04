@@ -138,9 +138,9 @@ async def submit_form(
     address: Optional[str] = Form(None),
     colony: Optional[str] = Form(None),
     area: Optional[str] = Form(None),
-    family_members_count: Optional[int] = Form(0),  # Flutter sends this
+    family_members_count: Optional[int] = Form(0),
     
-    # ✅ HEAD OF FAMILY VOTER INFO (add these to Flutter later)
+    # HEAD OF FAMILY VOTER INFO
     voter_id: Optional[str] = Form(None),
     aadhar: Optional[str] = Form(None),
     voter_names: Optional[str] = Form(None),
@@ -150,8 +150,7 @@ async def submit_form(
     # 2. Political Influence
     knows_corporator: Optional[bool] = Form(None),
     corporator_name: Optional[str] = Form(None),
-    other_politicians_known: Optional[str] = Form(None),  # Flutter sends this
-    known_leaders: Optional[str] = Form(None),
+    other_politicians_known: Optional[str] = Form(None),
     current_party_support: Optional[str] = Form(None),
     favourite_party: Optional[str] = Form(None),
     
@@ -161,7 +160,6 @@ async def submit_form(
     politician_visit_freq: Optional[str] = Form(None),
     satisfaction_with_corporator: Optional[str] = Form(None),
     satisfaction_with_service: Optional[str] = Form(None),
-    service_satisfaction: Optional[str] = Form(None),
     
     # 4. Community Engagement
     attended_events: Optional[bool] = Form(None),
@@ -171,7 +169,7 @@ async def submit_form(
     # 5. Demographics
     income_range: Optional[str] = Form(None),
     main_occupation: Optional[str] = Form(None),
-    highest_education: Optional[str] = Form(None),  # Flutter sends this
+    highest_education: Optional[str] = Form(None),
     housing_type: Optional[str] = Form(None),
     govt_schemes: Optional[str] = Form(None),
     children_count: Optional[int] = Form(0),
@@ -208,7 +206,7 @@ async def submit_form(
         except ValueError:
             pass
     
-    # ✅ Create form data with ALL columns mapped correctly
+    # ✅ FIXED: Create form data WITHOUT known_leaders
     form_data = FormData(
         volunteer_id=volunteer_id,
         
@@ -237,11 +235,10 @@ async def submit_form(
         knows_corporator=knows_corporator,
         corporator_name=corporator_name if knows_corporator else None,
         
-        # ✅ Store in BOTH columns
+        # ✅ FIXED: Use correct column names (NO known_leaders!)
         knows_politician=other_politicians_known,
         other_politicians_known=other_politicians_known,
         
-        known_leaders=known_leaders,
         current_party_support=current_party_support,
         favourite_party=favourite_party,
         
@@ -251,7 +248,6 @@ async def submit_form(
         politician_visit_freq=politician_visit_freq,
         satisfaction_with_corporator=satisfaction_with_corporator,
         satisfaction_with_service=satisfaction_with_service,
-        service_satisfaction=service_satisfaction,
         
         # Section 4: Community
         attended_events=attended_events,
@@ -374,7 +370,8 @@ def get_volunteer_forms(
             'address': form.address,
             'colony': form.colony,
             'area': form.area,
-            'family_members': form.family_members,  # ✅ Actual DB column
+            'family_members': form.family_members,
+            'family_members_count': form.family_members_count,
             
             # Voter Info
             'voter_id': form.voter_id,
@@ -386,8 +383,11 @@ def get_volunteer_forms(
             # Political Info
             'knows_corporator': form.knows_corporator,
             'corporator_name': form.corporator_name,
-            'knows_politician': form.knows_politician,  # ✅ Actual DB column
-            'known_leaders': form.known_leaders,  # ✅ Actual DB column
+            
+            # ✅ FIXED: Use correct column names (no known_leaders!)
+            'knows_politician': form.knows_politician,
+            'other_politicians_known': form.other_politicians_known,
+            
             'current_party_support': form.current_party_support,
             'favourite_party': form.favourite_party,
             
@@ -397,7 +397,6 @@ def get_volunteer_forms(
             'politician_visit_freq': form.politician_visit_freq,
             'satisfaction_with_corporator': form.satisfaction_with_corporator,
             'satisfaction_with_service': form.satisfaction_with_service,
-            'service_satisfaction': form.service_satisfaction,  # ✅ Actual DB column
             
             # Community
             'attended_events': form.attended_events,
@@ -407,17 +406,18 @@ def get_volunteer_forms(
             # Demographics
             'income_range': form.income_range,
             'main_occupation': form.main_occupation,
-            'education': form.education,  # ✅ Actual DB column (not highest_education)
+            'education': form.education,
+            'highest_education': form.highest_education,
             'housing_type': form.housing_type,
             'govt_schemes': form.govt_schemes,
-            'children_count': form.children_count,  # ✅ Actual DB column
+            'children_count': form.children_count,
             
             # Meta
             'visit_date': str(form.visit_date) if form.visit_date else None,
             'volunteer_name': form.volunteer_name,
             'remarks': form.remarks,
-            'corporator_division': form.corporator_division,  # ✅ Actual DB column
-            'zone': form.zone,  # ✅ Actual DB column
+            'corporator_division': form.corporator_division,
+            'zone': form.zone,
             
             # Media & Location
             'image_url': form.image_url,
@@ -433,6 +433,7 @@ def get_volunteer_forms(
         result.append(form_dict)
     
     return result
+
 
 
 @router.get("/AllformData")
