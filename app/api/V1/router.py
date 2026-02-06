@@ -1,9 +1,19 @@
 from fastapi import APIRouter
-from app.api.V1.endpoints import auth, voters, parts, areas, volunteers, volunteer_auth, excel_upload, location, logs, documents   # ✅ Add documents
-
+from app.api.V1.endpoints import (
+    auth, 
+    voters, 
+    parts, 
+    areas, 
+    volunteers, 
+    volunteer_auth, 
+    excel_upload, 
+    location, 
+    logs, 
+    documents,
+    polling_voters  # ✅ ADD THIS
+)
 
 api_router = APIRouter()
-
 
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(volunteer_auth.router, prefix="/volunteer-auth", tags=["Volunteer Auth"])
@@ -14,4 +24,5 @@ api_router.include_router(volunteers.router, prefix="/volunteers", tags=["Volunt
 api_router.include_router(parts.router, prefix="/parts", tags=["Parts"])
 api_router.include_router(voters.router, prefix="/voters", tags=["Voters"])
 api_router.include_router(logs.router, prefix="/logs", tags=["Logs"])
-api_router.include_router(documents.router, prefix="/documents", tags=["Documents"])  # ✅ ADD THIS LINE
+api_router.include_router(documents.router, prefix="/documents", tags=["Documents"])
+api_router.include_router(polling_voters.router, prefix="/polling-voters", tags=["Polling Voters"])  # ✅ ADD THIS LINE

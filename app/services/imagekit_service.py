@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from app.core.config import settings
 import logging
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -85,7 +86,7 @@ class ImageKitService:
             logger.exception(f"❌ Unexpected error: {endpoint}")
             return {"success": False, "error": str(e), "code": 500}
 
-    def _fetch_all_files_cached(self, max_limit: int = 5000) -> List[Dict]:
+    def _fetch_all_files_cached(self, max_limit: int = 100000) -> List[Dict]:
         """Fetch all files with caching - CRITICAL for performance"""
         cache_key = "all_files"
         
@@ -127,13 +128,58 @@ class ImageKitService:
         
         return all_files
 
-    def list_folders(self) -> List[Dict]:
+    def _fetch_subfolders_from_api(self, folder_path: str) -> List[Dict]:
+        """
+        Fetch subfolders directly from ImageKit API
+        This will show even empty folders
+        """
+        try:
+            logger.info(f"🔍 Fetching subfolders from API: {folder_path}")
+            
+            # ImageKit folder details endpoint
+            url = f"{self.base_api_url}/folder"
+            params = {"path": folder_path}
+            
+            response = requests.get(url, headers=self.headers, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                subfolders = []
+                
+                # Extract folder names from response
+                if isinstance(data, dict) and 'folders' in data:
+                    for folder in data['folders']:
+                        folder_name = folder.get('name', '')
+                        if folder_name:
+                            subfolders.append({
+                                'name': folder_name,
+                                'path': f"{folder_path}/{folder_name}"
+                            })
+                
+                logger.info(f"✅ Found {len(subfolders)} subfolders via API")
+                return subfolders
+            else:
+                logger.warning(f"⚠️ API returned status {response.status_code}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"❌ Error fetching subfolders from API: {e}")
+            return []
+
+    def list_folders(self, base_path: str = None, include_empty: bool = True) -> List[Dict]:
         """
         List folder names and PDF counts only (fast & lightweight)
         Uses cached file data for maximum performance
+        
+        Args:
+            base_path: Optional custom base path. If None, uses default from settings.
+            include_empty: If True, will fetch empty folders from API
         """
         try:
-            base_path = settings.IMAGEKIT_FOLDER_PATH
+            # ✅ Use provided base_path or default
+            if base_path is None:
+                base_path = settings.IMAGEKIT_FOLDER_PATH
+                
             logger.info(f"\n{'='*60}")
             logger.info(f"📁 LISTING FOLDERS in: {base_path}")
             logger.info(f"{'='*60}")
@@ -141,13 +187,10 @@ class ImageKitService:
             # Get all files (cached)
             all_files = self._fetch_all_files_cached()
             
-            if not all_files:
-                logger.warning("⚠️  No files found")
-                return []
-
             folders: Dict[str, Dict] = {}
             base_parts_count = len([p for p in base_path.split('/') if p])
 
+            # Count files in each subfolder
             for file in all_files:
                 file_path = file.get('filePath', '')
                 
@@ -171,6 +214,18 @@ class ImageKitService:
                     # Count only PDFs
                     if file.get('name', '').lower().endswith(".pdf"):
                         folders[folder_full_path]["file_count"] += 1
+
+            # ✅ NEW: If no folders found and include_empty is True, try API
+            if not folders and include_empty:
+                logger.info("⚠️ No folders found in cache, checking API for empty folders...")
+                api_folders = self._fetch_subfolders_from_api(base_path)
+                
+                for api_folder in api_folders:
+                    folders[api_folder['path']] = {
+                        "folder_path": api_folder['path'],
+                        "folder_name": api_folder['name'],
+                        "file_count": 0,
+                    }
 
             folder_list = list(folders.values())
             folder_list.sort(key=lambda x: x["folder_name"])

@@ -15,6 +15,7 @@ router = APIRouter()
 
 @router.get("/folders", response_model=Dict)
 def get_document_folders(
+    base_path: str = Query(None, description="Optional custom base path"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -22,14 +23,16 @@ def get_document_folders(
     Get all document folders from ImageKit
     - Fast & cached
     - Returns folder names and PDF counts only
+    - Supports custom base_path via query parameter
     """
     logger.info(f"\n{'='*70}")
     logger.info(f"📁 API: GET /folders")
     logger.info(f"👤 User: {current_user.full_name} (ID: {current_user.user_id})")
+    logger.info(f"📂 Base Path: {base_path or 'default'}")
     logger.info(f"{'='*70}")
     
     try:
-        folders = imagekit_service.list_folders()
+        folders = imagekit_service.list_folders(base_path=base_path)
         
         logger.info(f"✅ API Response: {len(folders)} folders")
         logger.info(f"{'='*70}\n")
@@ -151,4 +154,62 @@ def clear_cache(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to clear cache: {str(e)}"
+        )
+
+
+
+@router.get("/debug/all-folders")
+def debug_all_folders(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    DEBUG: Show ALL folders in ImageKit to verify structure
+    """
+    try:
+        all_files = imagekit_service._fetch_all_files_cached()
+        
+        # Get unique folder paths
+        folder_paths = set()
+        for file in all_files:
+            file_path = file.get('filePath', '')
+            if file_path:
+                # Get all parent folders
+                parts = file_path.split('/')
+                for i in range(1, len(parts)):
+                    folder_paths.add('/'.join(parts[:i]))
+        
+        # Filter for VoterConnectImages folders
+        voter_folders = sorted([
+            f for f in folder_paths 
+            if f.startswith('/VoterConnectImages')
+        ])
+        
+        # Get folder details
+        folder_details = []
+        for folder_path in voter_folders:
+            # Count files in this folder
+            file_count = len([
+                f for f in all_files 
+                if f.get('filePath', '').startswith(folder_path + '/')
+                and f.get('name', '').lower().endswith('.pdf')
+            ])
+            
+            folder_details.append({
+                'path': folder_path,
+                'file_count': file_count,
+                'depth': folder_path.count('/'),
+            })
+        
+        return {
+            'success': True,
+            'total_files': len(all_files),
+            'total_folders': len(voter_folders),
+            'folders': folder_details,
+        }
+    
+    except Exception as e:
+        logger.exception("❌ Debug error")
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
         )
