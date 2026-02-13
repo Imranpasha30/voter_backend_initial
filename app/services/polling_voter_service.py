@@ -1,6 +1,6 @@
 import csv
 from io import StringIO
-from typing import List, Optional, Dict,Any
+from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from app.models.polling_voter import PollingVoter
@@ -26,7 +26,6 @@ class PollingVoterService:
         skipped_rows = 0
         errors = []
         
-        # Get actual headers
         headers = csv_reader.fieldnames
         logger.info(f"📋 CSV Headers: {headers}")
         
@@ -34,7 +33,6 @@ class PollingVoterService:
             total_rows += 1
             
             try:
-                # ✅ Handle both 'voter_id' and 'Voter_ID'
                 voter_id = (
                     row.get('Voter_ID') or 
                     row.get('voter_id') or 
@@ -48,15 +46,12 @@ class PollingVoterService:
                     errors.append(f"Row {row_num}: Missing Voter_ID")
                     continue
                 
-                # Check if voter already exists
                 existing_voter = db.query(PollingVoter).filter(
                     PollingVoter.voter_id == voter_id
                 ).first()
                 
-                # ✅ Generate PDF URL from ImageKit
                 pdf_url = f"https://ik.imagekit.io/rokudigitals/VoterConnectImages/VoterCard2/voter_slips_pdf/{voter_id}.pdf"
                 
-                # ✅ Extract data with flexible key matching
                 ward_no = row.get('Ward_No') or row.get('ward_no')
                 district = row.get('District') or row.get('district')
                 municipality = row.get('Municipality') or row.get('municipality')
@@ -70,7 +65,6 @@ class PollingVoterService:
                 house_no = row.get('House_No') or row.get('house_no')
                 date_time = row.get('Date_Time') or row.get('date_time')
                 
-                # Parse age
                 age = None
                 if age_str:
                     try:
@@ -79,7 +73,6 @@ class PollingVoterService:
                         pass
                 
                 if existing_voter:
-                    # Update existing voter
                     existing_voter.ward_no = ward_no
                     existing_voter.district = district
                     existing_voter.municipality = municipality
@@ -94,7 +87,6 @@ class PollingVoterService:
                     existing_voter.date_time = date_time
                     existing_voter.pdf_url = pdf_url
                 else:
-                    # Create new voter
                     new_voter = PollingVoter(
                         voter_id=voter_id,
                         ward_no=ward_no,
@@ -115,7 +107,6 @@ class PollingVoterService:
                 
                 imported_rows += 1
                 
-                # Commit every 100 rows for better performance
                 if imported_rows % 100 == 0:
                     db.commit()
                     logger.info(f"✅ Imported {imported_rows}/{total_rows} voters...")
@@ -125,7 +116,6 @@ class PollingVoterService:
                 errors.append(f"Row {row_num}: {str(e)}")
                 logger.error(f"❌ Error importing row {row_num}: {e}")
         
-        # Final commit
         db.commit()
         
         logger.info(f"🎉 Import completed: {imported_rows}/{total_rows} voters")
@@ -136,7 +126,102 @@ class PollingVoterService:
             "total_rows": total_rows,
             "imported_rows": imported_rows,
             "skipped_rows": skipped_rows,
-            "errors": errors[:20]  # Return first 20 errors
+            "errors": errors[:20]
+        }
+    
+    @staticmethod
+    def update_phone_numbers_from_csv(db: Session, csv_content: str) -> Dict[str, Any]:
+        """
+        Update phone numbers from CSV/Excel with EPIC_NO and MOBILE_NO columns
+        """
+        csv_file = StringIO(csv_content)
+        csv_reader = csv.DictReader(csv_file)
+        
+        total_rows = 0
+        updated_rows = 0
+        skipped_rows = 0
+        not_found_rows = 0
+        errors = []
+        
+        headers = csv_reader.fieldnames
+        logger.info(f"📋 Phone CSV Headers: {headers}")
+        
+        # Identify column names
+        epic_col = None
+        mobile_col = None
+        
+        for header in headers:
+            header_lower = header.lower().strip()
+            if 'epic' in header_lower or 'voter_id' in header_lower or 'voter id' in header_lower:
+                epic_col = header
+            if 'mobile' in header_lower or 'phone' in header_lower or 'contact' in header_lower:
+                mobile_col = header
+        
+        if not epic_col or not mobile_col:
+            raise ValueError(f"Could not find EPIC_NO and MOBILE_NO columns. Found headers: {headers}")
+        
+        logger.info(f"✅ Using columns - EPIC: '{epic_col}', MOBILE: '{mobile_col}'")
+        
+        for row_num, row in enumerate(csv_reader, start=2):
+            total_rows += 1
+            
+            try:
+                # Get EPIC_NO (voter_id)
+                voter_id = str(row.get(epic_col, '')).strip()
+                if not voter_id or voter_id.lower() in ['nan', 'none', '']:
+                    skipped_rows += 1
+                    errors.append(f"Row {row_num}: Missing EPIC_NO")
+                    continue
+                
+                # Get MOBILE_NO
+                mobile_no = str(row.get(mobile_col, '')).strip()
+                if not mobile_no or mobile_no.lower() in ['nan', 'none', '']:
+                    skipped_rows += 1
+                    errors.append(f"Row {row_num}: Missing MOBILE_NO for {voter_id}")
+                    continue
+                
+                # Clean mobile number
+                mobile_no = mobile_no.replace('+91', '').replace('-', '').replace(' ', '').strip()
+                
+                # Validate mobile number
+                if not mobile_no.isdigit() or len(mobile_no) != 10:
+                    skipped_rows += 1
+                    errors.append(f"Row {row_num}: Invalid mobile '{mobile_no}' for {voter_id}")
+                    continue
+                
+                # Find voter in database
+                voter = db.query(PollingVoter).filter(
+                    PollingVoter.voter_id == voter_id
+                ).first()
+                
+                if voter:
+                    voter.phone_number = mobile_no
+                    updated_rows += 1
+                    
+                    if updated_rows % 100 == 0:
+                        db.commit()
+                        logger.info(f"✅ Updated {updated_rows}/{total_rows} phone numbers...")
+                else:
+                    not_found_rows += 1
+                    errors.append(f"Row {row_num}: Voter {voter_id} not found")
+            
+            except Exception as e:
+                skipped_rows += 1
+                errors.append(f"Row {row_num}: {str(e)}")
+                logger.error(f"❌ Error processing row {row_num}: {e}")
+        
+        db.commit()
+        
+        logger.info(f"🎉 Phone update completed: {updated_rows}/{total_rows} voters")
+        
+        return {
+            "success": True,
+            "message": f"Successfully updated {updated_rows} phone numbers",
+            "total_rows": total_rows,
+            "updated_rows": updated_rows,
+            "skipped_rows": skipped_rows,
+            "not_found_rows": not_found_rows,
+            "errors": errors[:50]
         }
     
     @staticmethod
@@ -145,7 +230,7 @@ class PollingVoterService:
         results = db.query(
             PollingVoter.municipality,
             func.count(PollingVoter.id).label('voter_count')
-        ).group_by(PollingVoter.municipality).all()
+        ).group_by(PollingVoter.municipality).order_by(PollingVoter.municipality).all()
         
         return [
             MunicipalityResponse(
@@ -187,12 +272,12 @@ class PollingVoterService:
         polling_station_no: str,
         skip: int = 0,
         limit: int = 50
-    ) -> dict:
+    ) -> Dict[str, Any]:
         """Get voters for a specific polling station with pagination"""
         query = db.query(PollingVoter).filter(
             PollingVoter.municipality == municipality,
             PollingVoter.polling_station_no == polling_station_no
-        )
+        ).order_by(PollingVoter.serial_no)
         
         total = query.count()
         voters = query.offset(skip).limit(limit).all()
@@ -219,7 +304,7 @@ class PollingVoterService:
         municipality: Optional[str] = None,
         skip: int = 0,
         limit: int = 50
-    ) -> dict:
+    ) -> Dict[str, Any]:
         """Search voters by name or ID"""
         search_query = db.query(PollingVoter).filter(
             or_(
@@ -245,7 +330,6 @@ class PollingVoterService:
             "total_pages": (total + limit - 1) // limit
         }
 
-
     @staticmethod
     def update_voter(
         db: Session,
@@ -263,7 +347,6 @@ class PollingVoterService:
             if not voter:
                 return None
             
-            # Update only provided fields
             if phone_number is not None:
                 voter.phone_number = phone_number
             
@@ -271,9 +354,9 @@ class PollingVoterService:
                 voter.is_voted = is_voted
             
             if voting_status is not None:
-                if voting_status not in ['red', 'yellow', 'green', None]:
+                if voting_status not in ['red', 'yellow', 'green', None, '']:
                     raise ValueError(f"Invalid voting_status: {voting_status}")
-                voter.voting_status = voting_status
+                voter.voting_status = voting_status if voting_status else None
             
             db.commit()
             db.refresh(voter)
@@ -289,7 +372,7 @@ class PollingVoterService:
     @staticmethod
     def bulk_update_voters(
         db: Session,
-        voter_ids: list[str],
+        voter_ids: List[str],
         voting_status: Optional[str] = None,
         is_voted: Optional[bool] = None
     ) -> Dict[str, Any]:

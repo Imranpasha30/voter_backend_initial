@@ -18,9 +18,9 @@ class PollingVoterBase(BaseModel):
     house_no: Optional[str] = None
     date_time: Optional[str] = None
     pdf_url: Optional[str] = None
-    phone_number: Optional[str] = None  # ✅ NEW
-    is_voted: bool = False  # ✅ NEW
-    voting_status: Optional[str] = None  # ✅ NEW
+    phone_number: Optional[str] = None
+    is_voted: bool = False
+    voting_status: Optional[str] = None
 
 
 class PollingVoterResponse(PollingVoterBase):
@@ -32,7 +32,6 @@ class PollingVoterResponse(PollingVoterBase):
         from_attributes = True
 
 
-# ✅ NEW: Update schema for PATCH requests
 class PollingVoterUpdate(BaseModel):
     phone_number: Optional[str] = Field(None, max_length=15)
     is_voted: Optional[bool] = None
@@ -65,6 +64,55 @@ class PollingStationResponse(BaseModel):
 class CSVUploadResponse(BaseModel):
     success: bool
     message: str
-    imported_count: int
+    total_rows: int
+    imported_rows: int
+    skipped_rows: int
+    errors: list[str]
+
+
+# ✅ NEW: Stats Response Schema
+class VoterStatsResponse(BaseModel):
+    success: bool
+    total_voters: int
+    total_municipalities: int
+    total_polling_stations: int
+    
+    # Gender stats
+    male_count: int
+    female_count: int
+    other_count: int
+    
+    # Age stats
+    age_18_25: int
+    age_26_35: int
+    age_36_50: int
+    age_51_65: int
+    age_65_plus: int
+    
+    # Voting Status stats
+    status_no: int
+    status_maybe: int
+    status_confirmed: int
+    status_not_set: int
+    
+    # Voted stats
+    voted_yes: int
+    voted_no: int
+    
+    # Phone stats
+    with_phone: int
+    without_phone: int
+
+
+# ✅ NEW: Bulk Update Request Schema
+class BulkUpdateRequest(BaseModel):
+    voter_ids: list[str] = Field(..., min_items=1)
+    voting_status: Optional[str] = Field(None, pattern="^(red|yellow|green)$")
+    is_voted: Optional[bool] = None
+
+
+# ✅ NEW: Bulk Update Response Schema
+class BulkUpdateResponse(BaseModel):
+    success: bool
+    message: str
     updated_count: int
-    failed_count: int
