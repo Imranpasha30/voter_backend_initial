@@ -1,10 +1,10 @@
 import csv
-import io
-from typing import List, Dict, Optional
+from io import StringIO
+from typing import List, Optional, Dict,Any
 from sqlalchemy.orm import Session
-from sqlalchemy import func, distinct, or_, cast, Integer
+from sqlalchemy import func, or_
 from app.models.polling_voter import PollingVoter
-from app.schemas.polling_voter import PollingVoterCreate
+from app.schemas.polling_voter import MunicipalityResponse, PollingStationResponse
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,138 +13,151 @@ logger = logging.getLogger(__name__)
 class PollingVoterService:
     
     @staticmethod
-    def import_from_csv(db: Session, csv_content: str) -> Dict:
+    def import_from_csv(db: Session, csv_content: str) -> dict:
         """
-        Import voters from CSV content
-        Handles both EPIC_No and Voter_ID columns (uses whichever is present)
+        Import polling voter data from CSV with PDF URLs
+        Handles both snake_case and Title_Case column names
         """
-        try:
-            # Parse CSV
-            csv_file = io.StringIO(csv_content)
-            reader = csv.DictReader(csv_file)
-            
-            total_rows = 0
-            imported_rows = 0
-            skipped_rows = 0
-            errors = []
-            
-            for row in reader:
-                total_rows += 1
-                
-                try:
-                    # Handle both EPIC_No and Voter_ID
-                    voter_id = row.get('EPIC_No') or row.get('Voter_ID') or row.get('epic_no') or row.get('voter_id')
-                    
-                    if not voter_id or not voter_id.strip():
-                        skipped_rows += 1
-                        errors.append(f"Row {total_rows}: Missing voter ID")
-                        continue
-                    
-                    voter_id = voter_id.strip()
-                    
-                    # Check if voter already exists
-                    existing = db.query(PollingVoter).filter(
-                        PollingVoter.voter_id == voter_id
-                    ).first()
-                    
-                    if existing:
-                        skipped_rows += 1
-                        logger.debug(f"Skipping duplicate voter: {voter_id}")
-                        continue
-                    
-                    # Get municipality (required field)
-                    municipality = row.get('Municipality') or row.get('municipality')
-                    polling_station_no = row.get('Polling_Station_No') or row.get('polling_station_no')
-                    
-                    if not municipality or not polling_station_no:
-                        skipped_rows += 1
-                        errors.append(f"Row {total_rows}: Missing municipality or polling station")
-                        continue
-                    
-                    # Create new voter
-                    voter = PollingVoter(
-                        voter_id=voter_id,
-                        ward_no=row.get('Ward_No') or row.get('ward_no'),
-                        district=row.get('District') or row.get('district'),
-                        municipality=municipality.strip(),
-                        polling_station_no=polling_station_no.strip(),
-                        polling_station_location=row.get('Polling_Station_Location') or row.get('polling_station_location'),
-                        serial_no=row.get('Serial_No') or row.get('serial_no'),
-                        voter_name=row.get('Voter_Name') or row.get('voter_name'),
-                        relation_name=row.get('Relation_Name') or row.get('relation_name'),
-                        age=int(row.get('Age') or row.get('age')) if (row.get('Age') or row.get('age', '')).strip().isdigit() else None,
-                        gender=row.get('Gender') or row.get('gender'),
-                        house_no=row.get('House_No') or row.get('house_no'),
-                        date_time=row.get('Date_Time') or row.get('date_time'),
-                    )
-                    
-                    db.add(voter)
-                    imported_rows += 1
-                    
-                    # Commit in batches of 100
-                    if imported_rows % 100 == 0:
-                        db.commit()
-                        logger.info(f"✅ Imported {imported_rows} voters...")
-                
-                except Exception as e:
-                    skipped_rows += 1
-                    errors.append(f"Row {total_rows}: {str(e)}")
-                    logger.error(f"Error processing row {total_rows}: {str(e)}")
-                    continue
-            
-            # Final commit
-            db.commit()
-            
-            logger.info(f"✅ CSV Import Complete: {imported_rows}/{total_rows} imported")
-            
-            return {
-                "success": True,
-                "message": "CSV imported successfully",
-                "total_rows": total_rows,
-                "imported_rows": imported_rows,
-                "skipped_rows": skipped_rows,
-                "errors": errors[:10]  # Return first 10 errors only
-            }
+        csv_file = StringIO(csv_content)
+        csv_reader = csv.DictReader(csv_file)
         
-        except Exception as e:
-            db.rollback()
-            logger.exception("❌ CSV import failed")
-            return {
-                "success": False,
-                "message": f"Import failed: {str(e)}",
-                "total_rows": 0,
-                "imported_rows": 0,
-                "skipped_rows": 0,
-                "errors": [str(e)]
-            }
+        total_rows = 0
+        imported_rows = 0
+        skipped_rows = 0
+        errors = []
+        
+        # Get actual headers
+        headers = csv_reader.fieldnames
+        logger.info(f"📋 CSV Headers: {headers}")
+        
+        for row_num, row in enumerate(csv_reader, start=2):
+            total_rows += 1
+            
+            try:
+                # ✅ Handle both 'voter_id' and 'Voter_ID'
+                voter_id = (
+                    row.get('Voter_ID') or 
+                    row.get('voter_id') or 
+                    row.get('VOTER_ID') or 
+                    row.get('VoterID') or
+                    ''
+                ).strip()
+                
+                if not voter_id:
+                    skipped_rows += 1
+                    errors.append(f"Row {row_num}: Missing Voter_ID")
+                    continue
+                
+                # Check if voter already exists
+                existing_voter = db.query(PollingVoter).filter(
+                    PollingVoter.voter_id == voter_id
+                ).first()
+                
+                # ✅ Generate PDF URL from ImageKit
+                pdf_url = f"https://ik.imagekit.io/rokudigitals/VoterConnectImages/VoterCard2/voter_slips_pdf/{voter_id}.pdf"
+                
+                # ✅ Extract data with flexible key matching
+                ward_no = row.get('Ward_No') or row.get('ward_no')
+                district = row.get('District') or row.get('district')
+                municipality = row.get('Municipality') or row.get('municipality')
+                polling_station_no = row.get('Polling_Station_No') or row.get('polling_station_no')
+                polling_station_location = row.get('Polling_Station_Location') or row.get('polling_station_location')
+                serial_no = row.get('Serial_No') or row.get('serial_no')
+                voter_name = row.get('Voter_Name') or row.get('voter_name')
+                relation_name = row.get('Relation_Name') or row.get('relation_name')
+                age_str = row.get('Age') or row.get('age')
+                gender = row.get('Gender') or row.get('gender')
+                house_no = row.get('House_No') or row.get('house_no')
+                date_time = row.get('Date_Time') or row.get('date_time')
+                
+                # Parse age
+                age = None
+                if age_str:
+                    try:
+                        age = int(age_str)
+                    except ValueError:
+                        pass
+                
+                if existing_voter:
+                    # Update existing voter
+                    existing_voter.ward_no = ward_no
+                    existing_voter.district = district
+                    existing_voter.municipality = municipality
+                    existing_voter.polling_station_no = polling_station_no
+                    existing_voter.polling_station_location = polling_station_location
+                    existing_voter.serial_no = serial_no
+                    existing_voter.voter_name = voter_name
+                    existing_voter.relation_name = relation_name
+                    existing_voter.age = age
+                    existing_voter.gender = gender
+                    existing_voter.house_no = house_no
+                    existing_voter.date_time = date_time
+                    existing_voter.pdf_url = pdf_url
+                else:
+                    # Create new voter
+                    new_voter = PollingVoter(
+                        voter_id=voter_id,
+                        ward_no=ward_no,
+                        district=district,
+                        municipality=municipality,
+                        polling_station_no=polling_station_no,
+                        polling_station_location=polling_station_location,
+                        serial_no=serial_no,
+                        voter_name=voter_name,
+                        relation_name=relation_name,
+                        age=age,
+                        gender=gender,
+                        house_no=house_no,
+                        date_time=date_time,
+                        pdf_url=pdf_url
+                    )
+                    db.add(new_voter)
+                
+                imported_rows += 1
+                
+                # Commit every 100 rows for better performance
+                if imported_rows % 100 == 0:
+                    db.commit()
+                    logger.info(f"✅ Imported {imported_rows}/{total_rows} voters...")
+                
+            except Exception as e:
+                skipped_rows += 1
+                errors.append(f"Row {row_num}: {str(e)}")
+                logger.error(f"❌ Error importing row {row_num}: {e}")
+        
+        # Final commit
+        db.commit()
+        
+        logger.info(f"🎉 Import completed: {imported_rows}/{total_rows} voters")
+        
+        return {
+            "success": True,
+            "message": f"Successfully imported {imported_rows} voters",
+            "total_rows": total_rows,
+            "imported_rows": imported_rows,
+            "skipped_rows": skipped_rows,
+            "errors": errors[:20]  # Return first 20 errors
+        }
     
     @staticmethod
-    def get_municipalities(db: Session) -> List[Dict]:
-        """
-        Get unique municipalities with voter counts
-        """
+    def get_municipalities(db: Session) -> List[MunicipalityResponse]:
+        """Get all unique municipalities with voter counts"""
         results = db.query(
             PollingVoter.municipality,
             func.count(PollingVoter.id).label('voter_count')
-        ).group_by(
-            PollingVoter.municipality
-        ).order_by(
-            PollingVoter.municipality
-        ).all()
+        ).group_by(PollingVoter.municipality).all()
         
         return [
-            {
-                "municipality": r.municipality,
-                "voter_count": r.voter_count
-            }
-            for r in results
+            MunicipalityResponse(
+                municipality=municipality,
+                voter_count=count
+            )
+            for municipality, count in results
         ]
     
     @staticmethod
-    def get_polling_stations(db: Session, municipality: str) -> List[Dict]:
-        """
-        Get polling stations for a specific municipality
-        """
+    def get_polling_stations(db: Session, municipality: str) -> List[PollingStationResponse]:
+        """Get polling stations for a municipality"""
         results = db.query(
             PollingVoter.polling_station_no,
             PollingVoter.polling_station_location,
@@ -155,16 +168,16 @@ class PollingVoterService:
             PollingVoter.polling_station_no,
             PollingVoter.polling_station_location
         ).order_by(
-            cast(PollingVoter.polling_station_no, Integer).asc()
+            PollingVoter.polling_station_no
         ).all()
         
         return [
-            {
-                "polling_station_no": r.polling_station_no,
-                "polling_station_location": r.polling_station_location,
-                "voter_count": r.voter_count
-            }
-            for r in results
+            PollingStationResponse(
+                polling_station_no=station_no,
+                polling_station_location=location,
+                voter_count=count
+            )
+            for station_no, location, count in results
         ]
     
     @staticmethod
@@ -174,15 +187,11 @@ class PollingVoterService:
         polling_station_no: str,
         skip: int = 0,
         limit: int = 50
-    ) -> Dict:
-        """
-        Get voters for a specific polling station with pagination
-        """
+    ) -> dict:
+        """Get voters for a specific polling station with pagination"""
         query = db.query(PollingVoter).filter(
             PollingVoter.municipality == municipality,
             PollingVoter.polling_station_no == polling_station_no
-        ).order_by(
-            cast(PollingVoter.serial_no, Integer).asc().nullslast()
         )
         
         total = query.count()
@@ -193,14 +202,12 @@ class PollingVoterService:
             "total": total,
             "page": (skip // limit) + 1,
             "page_size": limit,
-            "total_pages": (total + limit - 1) // limit if total > 0 else 1
+            "total_pages": (total + limit - 1) // limit
         }
     
     @staticmethod
     def get_voter_by_id(db: Session, voter_id: str) -> Optional[PollingVoter]:
-        """
-        Get single voter by EPIC_No
-        """
+        """Get voter by voter ID"""
         return db.query(PollingVoter).filter(
             PollingVoter.voter_id == voter_id
         ).first()
@@ -212,23 +219,20 @@ class PollingVoterService:
         municipality: Optional[str] = None,
         skip: int = 0,
         limit: int = 50
-    ) -> Dict:
-        """
-        Search voters by name or voter ID
-        """
-        search_query = db.query(PollingVoter)
+    ) -> dict:
+        """Search voters by name or ID"""
+        search_query = db.query(PollingVoter).filter(
+            or_(
+                PollingVoter.voter_name.ilike(f"%{query}%"),
+                PollingVoter.voter_id.ilike(f"%{query}%"),
+                PollingVoter.house_no.ilike(f"%{query}%")
+            )
+        )
         
         if municipality:
             search_query = search_query.filter(
                 PollingVoter.municipality == municipality
             )
-        
-        search_query = search_query.filter(
-            or_(
-                PollingVoter.voter_name.ilike(f"%{query}%"),
-                PollingVoter.voter_id.ilike(f"%{query}%")
-            )
-        )
         
         total = search_query.count()
         voters = search_query.offset(skip).limit(limit).all()
@@ -238,5 +242,91 @@ class PollingVoterService:
             "total": total,
             "page": (skip // limit) + 1,
             "page_size": limit,
-            "total_pages": (total + limit - 1) // limit if total > 0 else 1
+            "total_pages": (total + limit - 1) // limit
         }
+
+
+    @staticmethod
+    def update_voter(
+        db: Session,
+        voter_id: str,
+        phone_number: Optional[str] = None,
+        is_voted: Optional[bool] = None,
+        voting_status: Optional[str] = None
+    ) -> Optional[PollingVoter]:
+        """Update voter tracking information"""
+        try:
+            voter = db.query(PollingVoter).filter(
+                PollingVoter.voter_id == voter_id
+            ).first()
+            
+            if not voter:
+                return None
+            
+            # Update only provided fields
+            if phone_number is not None:
+                voter.phone_number = phone_number
+            
+            if is_voted is not None:
+                voter.is_voted = is_voted
+            
+            if voting_status is not None:
+                if voting_status not in ['red', 'yellow', 'green', None]:
+                    raise ValueError(f"Invalid voting_status: {voting_status}")
+                voter.voting_status = voting_status
+            
+            db.commit()
+            db.refresh(voter)
+            
+            logger.info(f"✅ Updated voter {voter_id}")
+            return voter
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ Failed to update voter {voter_id}: {str(e)}")
+            raise
+
+    @staticmethod
+    def bulk_update_voters(
+        db: Session,
+        voter_ids: list[str],
+        voting_status: Optional[str] = None,
+        is_voted: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """Bulk update multiple voters"""
+        try:
+            query = db.query(PollingVoter).filter(
+                PollingVoter.voter_id.in_(voter_ids)
+            )
+            
+            update_data = {}
+            if voting_status is not None:
+                if voting_status not in ['red', 'yellow', 'green']:
+                    raise ValueError(f"Invalid voting_status: {voting_status}")
+                update_data['voting_status'] = voting_status
+            
+            if is_voted is not None:
+                update_data['is_voted'] = is_voted
+            
+            if not update_data:
+                return {
+                    "success": False,
+                    "message": "No update data provided",
+                    "updated_count": 0
+                }
+            
+            count = query.update(update_data, synchronize_session=False)
+            db.commit()
+            
+            logger.info(f"✅ Bulk updated {count} voters")
+            
+            return {
+                "success": True,
+                "message": f"Successfully updated {count} voters",
+                "updated_count": count
+            }
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ Bulk update failed: {str(e)}")
+            raise
