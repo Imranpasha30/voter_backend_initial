@@ -62,7 +62,7 @@ app = create_application()
 @app.on_event("startup")
 def on_startup():
     """Create tables on startup and verify configuration"""
-    Base.metadata.create_all(bind=engine)
+    
     
     # ✅ Get environment
     env = os.getenv("ENVIRONMENT", "development").lower()

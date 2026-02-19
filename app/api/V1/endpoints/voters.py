@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from typing import Optional, Union
+from sqlalchemy import case 
 
 from app.db.session import get_db
 from app.models.voter import Voter
@@ -14,7 +15,7 @@ from app.api.deps import get_current_user
 from app.models.user import User
 from app.models.volunteer import Volunteer
 from app.core.config import settings
-from app.services.audit_logger import AuditLogger  # ✅ Import audit logger
+from app.services.audit_logger import AuditLogger
 
 
 router = APIRouter()
@@ -28,10 +29,8 @@ def get_effective_user_id(current_user: Union[User, Volunteer]) -> int:
     - If current_user is a Volunteer: return their politician_id (parent)
     """
     if hasattr(current_user, 'politician_id'):
-        # This is a Volunteer - return their parent politician's ID
         return current_user.politician_id
     else:
-        # This is a Politician (User) - return their own ID
         return current_user.user_id
 
 
@@ -46,7 +45,6 @@ def check_voter_access(voter: Voter, user_id: int, db: Session) -> bool:
     if not user_area_ids:
         return False
     
-    # Get voter's part area_id
     part = db.query(Part).filter(Part.part_id == voter.part_id).first()
     if not part or part.area_id not in user_area_ids:
         return False
@@ -54,7 +52,43 @@ def check_voter_access(voter: Voter, user_id: int, db: Session) -> bool:
     return True
 
 
+# ✅ Helper function to select language-specific columns
+def get_voter_dict_with_language(voter: Voter, part: Part, lang: str = 'en') -> dict:
+    """
+    Return voter dictionary with language-specific fields.
+    
+    lang='te' -> Use Telugu columns (base columns)
+    lang='en' -> Use English columns (*_en columns)
+    """
+    voter_dict = voter.__dict__.copy()
+    
+    # Part information
+    voter_dict['part_no'] = part.part_no if part else None
+    
+    if lang == 'te':
+        # Telugu: use base columns
+        voter_dict['part_name'] = part.part_name_v1 if part else None
+        # Base columns are already in voter_dict (district, municipality, etc.)
+    else:
+        # English: use *_en columns
+        voter_dict['part_name'] = part.part_name_en if part else None
+        # Override with English columns if available
+        if voter.district_en:
+            voter_dict['district'] = voter.district_en
+        if voter.municipality_en:
+            voter_dict['municipality'] = voter.municipality_en
+        if voter.polling_station_location_en:
+            voter_dict['polling_station_location'] = voter.polling_station_location_en
+        if voter.voter_name_en:
+            voter_dict['voter_name'] = voter.voter_name_en
+        if voter.relation_name_en:
+            voter_dict['relation_name'] = voter.relation_name_en
+    
+    return voter_dict
+
+
 # ==================== VOTER ENDPOINTS ====================
+
 
 @router.get("/", response_model=VotersListResponse)
 def get_voters_by_part(
@@ -62,10 +96,20 @@ def get_voters_by_part(
     page: int = Query(1, ge=1),
     page_size: int = Query(settings.DEFAULT_PAGE_SIZE, ge=1, le=settings.MAX_PAGE_SIZE),
     search: Optional[str] = None,
+    lang: str = Query('en', description="Language: 'en' or 'te'"),
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get voters by part number (assembly constituency) - works for Politicians and Volunteers"""
+    """
+    Get voters by part number (assembly constituency) - works for Politicians and Volunteers
+    
+    Query Parameters:
+    - lang: 'en' for English, 'te' for Telugu (default: 'en')
+    """
+    
+    lang = lang.lower()
+    if lang not in ('en', 'te'):
+        lang = 'en'  # Default to English if invalid
     
     effective_user_id = get_effective_user_id(current_user)
     
@@ -86,26 +130,49 @@ def get_voters_by_part(
     
     query = db.query(Voter).filter(Voter.part_id == part.part_id)
     
+    # ✅ Search in language-specific columns
     if search:
-        query = query.filter(
-            or_(
-                Voter.fm_name_en.ilike(f"%{search}%"),
-                Voter.lastname_en.ilike(f"%{search}%"),
-                Voter.epic_no.ilike(f"%{search}%"),
-                Voter.mobile_no.ilike(f"%{search}%")
+        if lang == 'te':
+            # Search Telugu columns
+            query = query.filter(
+                or_(
+                    Voter.voter_name.ilike(f"%{search}%"),
+                    Voter.epic_no.ilike(f"%{search}%"),
+                    Voter.phone_number.ilike(f"%{search}%"),
+                    Voter.house_no.ilike(f"%{search}%"),
+                    Voter.relation_name.ilike(f"%{search}%")
+                )
             )
-        )
+        else:
+            # Search English columns
+            query = query.filter(
+                or_(
+                    Voter.voter_name_en.ilike(f"%{search}%"),
+                    Voter.voter_name.ilike(f"%{search}%"),  # Fallback
+                    Voter.epic_no.ilike(f"%{search}%"),
+                    Voter.phone_number.ilike(f"%{search}%"),
+                    Voter.house_no.ilike(f"%{search}%"),
+                    Voter.relation_name_en.ilike(f"%{search}%"),
+                    Voter.relation_name.ilike(f"%{search}%")  # Fallback
+                )
+            )
     
-    query = query.order_by(Voter.slnoinpart)
+    query = query.order_by(Voter.serial_no)
     total = query.count()
     offset = (page - 1) * page_size
     voters = query.offset(offset).limit(page_size).all()
+    
+    # ✅ Transform voters with language-specific data
+    voter_responses = []
+    for voter in voters:
+        voter_dict = get_voter_dict_with_language(voter, part, lang)
+        voter_responses.append(VoterResponse(**voter_dict))
     
     return VotersListResponse(
         total=total,
         page=page,
         page_size=page_size,
-        voters=voters
+        voters=voter_responses
     )
 
 
@@ -114,10 +181,20 @@ def search_voters(
     q: str = Query(..., min_length=1),
     page: int = Query(1, ge=1),
     page_size: int = Query(settings.DEFAULT_PAGE_SIZE, ge=1, le=settings.MAX_PAGE_SIZE),
+    lang: str = Query('en', description="Language: 'en' or 'te'"),
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Search voters globally by name, EPIC, or mobile - respects user's assigned areas"""
+    """
+    Search voters globally by name, EPIC, or phone - respects user's assigned areas
+    
+    Query Parameters:
+    - lang: 'en' for English, 'te' for Telugu (default: 'en')
+    """
+    
+    lang = lang.lower()
+    if lang not in ('en', 'te'):
+        lang = 'en'
     
     effective_user_id = get_effective_user_id(current_user)
     
@@ -135,35 +212,68 @@ def search_voters(
     if not part_ids:
         return VotersListResponse(total=0, page=page, page_size=page_size, voters=[])
     
-    query = db.query(Voter).filter(
-        Voter.part_id.in_(part_ids),
-        or_(
-            Voter.fm_name_en.ilike(f"%{q}%"),
-            Voter.lastname_en.ilike(f"%{q}%"),
-            Voter.epic_no.ilike(f"%{q}%"),
-            Voter.mobile_no.ilike(f"%{q}%")
+    # ✅ Search based on language
+    if lang == 'te':
+        query = db.query(Voter).filter(
+            Voter.part_id.in_(part_ids),
+            or_(
+                Voter.voter_name.ilike(f"%{q}%"),
+                Voter.epic_no.ilike(f"%{q}%"),
+                Voter.phone_number.ilike(f"%{q}%"),
+                Voter.house_no.ilike(f"%{q}%"),
+                Voter.relation_name.ilike(f"%{q}%")
+            )
         )
-    )
+    else:
+        query = db.query(Voter).filter(
+            Voter.part_id.in_(part_ids),
+            or_(
+                Voter.voter_name_en.ilike(f"%{q}%"),
+                Voter.voter_name.ilike(f"%{q}%"),
+                Voter.epic_no.ilike(f"%{q}%"),
+                Voter.phone_number.ilike(f"%{q}%"),
+                Voter.house_no.ilike(f"%{q}%"),
+                Voter.relation_name_en.ilike(f"%{q}%"),
+                Voter.relation_name.ilike(f"%{q}%")
+            )
+        )
     
     total = query.count()
     offset = (page - 1) * page_size
     voters = query.offset(offset).limit(page_size).all()
     
+    # ✅ Get parts for language-specific transformation
+    voter_responses = []
+    for voter in voters:
+        part = db.query(Part).filter(Part.part_id == voter.part_id).first()
+        voter_dict = get_voter_dict_with_language(voter, part, lang)
+        voter_responses.append(VoterResponse(**voter_dict))
+    
     return VotersListResponse(
         total=total,
         page=page,
         page_size=page_size,
-        voters=voters
+        voters=voter_responses
     )
 
 
 @router.get("/{epic_no}", response_model=VoterResponse)
 def get_voter_by_epic(
     epic_no: str,
+    lang: str = Query('en', description="Language: 'en' or 'te'"),
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get voter details by EPIC number - with access control"""
+    """
+    Get voter details by EPIC number - with access control
+    
+    Query Parameters:
+    - lang: 'en' for English, 'te' for Telugu (default: 'en')
+    """
+    
+    lang = lang.lower()
+    if lang not in ('en', 'te'):
+        lang = 'en'
     
     effective_user_id = get_effective_user_id(current_user)
     
@@ -176,9 +286,7 @@ def get_voter_by_epic(
     
     part = db.query(Part).filter(Part.part_id == voter.part_id).first()
     
-    voter_dict = voter.__dict__.copy()
-    voter_dict['part_no'] = part.part_no if part else None
-    voter_dict['part_name'] = part.part_name_en if part else None
+    voter_dict = get_voter_dict_with_language(voter, part, lang)
     
     return VoterResponse(**voter_dict)
 
@@ -186,10 +294,20 @@ def get_voter_by_epic(
 @router.get("/id/{voter_id}", response_model=VoterResponse)
 def get_voter_by_id(
     voter_id: int,
+    lang: str = Query('en', description="Language: 'en' or 'te'"),
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get voter details by voter ID - with access control"""
+    """
+    Get voter details by voter ID - with access control
+    
+    Query Parameters:
+    - lang: 'en' for English, 'te' for Telugu (default: 'en')
+    """
+    
+    lang = lang.lower()
+    if lang not in ('en', 'te'):
+        lang = 'en'
     
     effective_user_id = get_effective_user_id(current_user)
     
@@ -202,9 +320,7 @@ def get_voter_by_id(
     
     part = db.query(Part).filter(Part.part_id == voter.part_id).first()
     
-    voter_dict = voter.__dict__.copy()
-    voter_dict['part_no'] = part.part_no if part else None
-    voter_dict['part_name'] = part.part_name_en if part else None
+    voter_dict = get_voter_dict_with_language(voter, part, lang)
     
     return VoterResponse(**voter_dict)
 
@@ -212,7 +328,7 @@ def get_voter_by_id(
 @router.post("/", response_model=VoterResponse, status_code=status.HTTP_201_CREATED)
 def create_voter(
     voter: VoterCreate,
-    request: Request,  # ✅ Add Request for audit logging
+    request: Request,
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -236,7 +352,6 @@ def create_voter(
     if part.area_id not in user_area_ids:
         raise HTTPException(status_code=403, detail="Access denied to create voter in this area")
     
-    # Create voter
     db_voter = Voter(**voter.model_dump())
     db.add(db_voter)
     db.commit()
@@ -262,114 +377,95 @@ def create_voter(
     return db_voter
 
 
-@router.put("/{voter_id}", response_model=VoterResponse)
-def update_voter(
-    voter_id: int,
+@router.patch("/{epic_no}/update", response_model=VoterResponse)
+def update_voter_by_epic(
+    epic_no: str,
     voter_update: VoterUpdate,
-    request: Request,  # ✅ Add Request
+    request: Request,
+    lang: str = Query('en', description="Response language: 'en' or 'te'"),
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update voter details - with access control and audit logging"""
+    """
+    Update voter details with audit logging
     
-    effective_user_id = get_effective_user_id(current_user)
-    
-    voter = db.query(Voter).filter(Voter.voter_id == voter_id).first()
-    if not voter:
-        raise HTTPException(status_code=404, detail="Voter not found")
-    
-    if not check_voter_access(voter, effective_user_id, db):
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    # ✅ Track changes
-    update_data = voter_update.model_dump(exclude_unset=True)
-    changes = {}
-    
-    for key, new_value in update_data.items():
-        old_value = getattr(voter, key, None)
-        if old_value != new_value:
-            changes[key] = {'old': old_value, 'new': new_value}
-            setattr(voter, key, new_value)
-    
-    db.commit()
-    db.refresh(voter)
-    
-    # ✅ Log changes
-    if changes:
-        try:
-            AuditLogger.log_multiple_changes(
-                db=db,
-                voter_id=voter.voter_id,
-                epic_no=voter.epic_no,
-                current_user=current_user,
-                action_type='UPDATE',
-                changes=changes,
-                ip_address=request.client.host if request.client else None,
-                device_info=request.headers.get('user-agent')
-            )
-            db.commit()
-        except Exception as e:
-            print(f"Audit log error: {e}")
-    
-    return voter
-
-
-@router.patch("/{voter_id}", response_model=VoterResponse)
-def partial_update_voter(
-    voter_id: int,
-    voter_update: VoterUpdate,
-    request: Request,  # ✅ Add Request
-    current_user: Union[User, Volunteer] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Partially update voter details - with access control and audit logging"""
-    
-    effective_user_id = get_effective_user_id(current_user)
-    
-    voter = db.query(Voter).filter(Voter.voter_id == voter_id).first()
-    if not voter:
-        raise HTTPException(status_code=404, detail="Voter not found")
-    
-    if not check_voter_access(voter, effective_user_id, db):
-        raise HTTPException(status_code=403, detail="Access denied")
-    
-    # ✅ Track changes
-    update_data = voter_update.model_dump(exclude_unset=True, exclude_none=True)
-    changes = {}
-    
-    for key, new_value in update_data.items():
-        old_value = getattr(voter, key, None)
-        if old_value != new_value:
-            changes[key] = {'old': old_value, 'new': new_value}
-            setattr(voter, key, new_value)
-    
-    db.commit()
-    db.refresh(voter)
-    
-    # ✅ Log changes
-    if changes:
-        try:
-            AuditLogger.log_multiple_changes(
-                db=db,
-                voter_id=voter.voter_id,
-                epic_no=voter.epic_no,
-                current_user=current_user,
-                action_type='UPDATE',
-                changes=changes,
-                ip_address=request.client.host if request.client else None,
-                device_info=request.headers.get('user-agent')
-            )
-            db.commit()
-        except Exception as e:
-            print(f"Audit log error: {e}")
-    
-    return voter
+    Query Parameters:
+    - lang: 'en' for English, 'te' for Telugu (default: 'en') - affects response only
+    """
+    try:
+        lang = lang.lower()
+        if lang not in ('en', 'te'):
+            lang = 'en'
+        
+        effective_user_id = get_effective_user_id(current_user)
+        
+        voter = db.query(Voter).filter(Voter.epic_no == epic_no).first()
+        if not voter:
+            raise HTTPException(status_code=404, detail="Voter not found")
+        
+        if not check_voter_access(voter, effective_user_id, db):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        update_data = voter_update.model_dump(exclude_unset=True, exclude_none=True)
+        
+        if 'part_id' in update_data:
+            new_part = db.query(Part).filter(Part.part_id == update_data['part_id']).first()
+            if not new_part:
+                raise HTTPException(status_code=404, detail="Invalid part_id")
+            
+            user_area_ids = [area.area_id for area in db.query(UserArea.area_id).filter(
+                UserArea.user_id == effective_user_id
+            ).all()]
+            
+            if new_part.area_id not in user_area_ids:
+                raise HTTPException(status_code=403, detail="Access denied: Cannot move voter to this constituency")
+        
+        # ✅ Track changes
+        changes = {}
+        for key, new_value in update_data.items():
+            if hasattr(voter, key):
+                old_value = getattr(voter, key)
+                if old_value != new_value:
+                    changes[key] = {'old': old_value, 'new': new_value}
+                    setattr(voter, key, new_value)
+        
+        db.commit()
+        db.refresh(voter)
+        
+        # ✅ Log changes
+        if changes:
+            try:
+                AuditLogger.log_multiple_changes(
+                    db=db,
+                    voter_id=voter.voter_id,
+                    epic_no=voter.epic_no,
+                    current_user=current_user,
+                    action_type='UPDATE',
+                    changes=changes,
+                    ip_address=request.client.host if request.client else None,
+                    device_info=request.headers.get('user-agent')
+                )
+                db.commit()
+            except Exception as e:
+                print(f"Audit log error: {e}")
+        
+        part = db.query(Part).filter(Part.part_id == voter.part_id).first()
+        voter_dict = get_voter_dict_with_language(voter, part, lang)
+        
+        return VoterResponse(**voter_dict)
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update voter: {str(e)}")
 
 
 @router.delete("/{voter_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_voter(
     voter_id: int,
-    request: Request,  # ✅ Add Request
+    request: Request,
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -384,8 +480,10 @@ def delete_voter(
     if not check_voter_access(voter, effective_user_id, db):
         raise HTTPException(status_code=403, detail="Access denied")
     
-    # ✅ Log deletion before deleting
     epic_no = voter.epic_no
+    voter_name = voter.voter_name
+    
+    # ✅ Log deletion
     try:
         AuditLogger.log_voter_change(
             db=db,
@@ -394,7 +492,7 @@ def delete_voter(
             current_user=current_user,
             action_type='DELETE',
             field_changed='voter_deleted',
-            old_value=f'Voter {voter.fm_name_en} {voter.lastname_en}',
+            old_value=f'Voter {voter_name}',
             ip_address=request.client.host if request.client else None,
             device_info=request.headers.get('user-agent')
         )
@@ -410,10 +508,20 @@ def delete_voter(
 
 @router.get("/stats/summary")
 def get_voter_statistics(
+    lang: str = Query('en', description="Language: 'en' or 'te'"),
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get voter statistics - respects user's assigned areas"""
+    """
+    Get voter statistics - respects user's assigned areas
+    
+    Query Parameters:
+    - lang: 'en' for English, 'te' for Telugu (default: 'en')
+    """
+    
+    lang = lang.lower()
+    if lang not in ('en', 'te'):
+        lang = 'en'
     
     effective_user_id = get_effective_user_id(current_user)
     
@@ -460,156 +568,40 @@ def get_voter_statistics(
         func.count(Voter.voter_id).label('count')
     ).filter(Voter.part_id.in_(part_ids)).group_by('age_group').all()
     
+    # ✅ Translate labels if Telugu
+    if lang == 'te':
+        gender_translation = {
+            'Male': 'పురుషుడు',
+            'Female': 'స్త్రీ',
+            'Other': 'ఇతర'
+        }
+        gender_distribution = [
+            {
+                "gender": gender_translation.get(g, g),
+                "count": c
+            } for g, c in gender_stats
+        ]
+        
+        age_translation = {
+            '18-24': '18-24',
+            '25-34': '25-34',
+            '35-44': '35-44',
+            '45-54': '45-54',
+            '55-64': '55-64',
+            '65+': '65+'
+        }
+        age_distribution = [
+            {
+                "age_group": age_translation.get(a, a),
+                "count": c
+            } for a, c in age_stats
+        ]
+    else:
+        gender_distribution = [{"gender": g, "count": c} for g, c in gender_stats]
+        age_distribution = [{"age_group": a, "count": c} for a, c in age_stats]
+    
     return {
         "total_voters": total_voters,
-        "gender_distribution": [{"gender": g, "count": c} for g, c in gender_stats],
-        "age_distribution": [{"age_group": a, "count": c} for a, c in age_stats]
+        "gender_distribution": gender_distribution,
+        "age_distribution": age_distribution
     }
-
-
-# ==================== UPDATE ENDPOINTS WITH AUDIT LOGGING ====================
-
-@router.patch("/{epic_no}/update", response_model=VoterResponse)
-def update_voter_by_epic(
-    epic_no: str,
-    voter_update: VoterUpdate,
-    request: Request,  # ✅ Add Request
-    current_user: Union[User, Volunteer] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update voter details with audit logging - works for Politicians and Volunteers"""
-    try:
-        effective_user_id = get_effective_user_id(current_user)
-        
-        voter = db.query(Voter).filter(Voter.epic_no == epic_no).first()
-        if not voter:
-            raise HTTPException(status_code=404, detail="Voter not found")
-        
-        if not check_voter_access(voter, effective_user_id, db):
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        update_data = voter_update.model_dump(exclude_unset=True, exclude_none=True)
-        
-        if 'part_id' in update_data:
-            new_part = db.query(Part).filter(Part.part_id == update_data['part_id']).first()
-            if not new_part:
-                raise HTTPException(status_code=404, detail="Invalid part_id")
-            
-            user_area_ids = [area.area_id for area in db.query(UserArea.area_id).filter(
-                UserArea.user_id == effective_user_id
-            ).all()]
-            
-            if new_part.area_id not in user_area_ids:
-                raise HTTPException(status_code=403, detail="Access denied: Cannot move voter to this constituency")
-        
-        # ✅ Track changes for audit log
-        changes = {}
-        for key, new_value in update_data.items():
-            if hasattr(voter, key):
-                old_value = getattr(voter, key)
-                if old_value != new_value:
-                    changes[key] = {'old': old_value, 'new': new_value}
-                    setattr(voter, key, new_value)
-        
-        db.commit()
-        db.refresh(voter)
-        
-        # ✅ Log all changes
-        if changes:
-            try:
-                AuditLogger.log_multiple_changes(
-                    db=db,
-                    voter_id=voter.voter_id,
-                    epic_no=voter.epic_no,
-                    current_user=current_user,
-                    action_type='UPDATE',
-                    changes=changes,
-                    ip_address=request.client.host if request.client else None,
-                    device_info=request.headers.get('user-agent')
-                )
-                db.commit()
-            except Exception as e:
-                print(f"Audit log error: {e}")
-        
-        part = db.query(Part).filter(Part.part_id == voter.part_id).first()
-        voter_dict = {
-            **voter.__dict__,
-            'part_no': part.part_no if part else None,
-            'part_name': part.part_name_en if part else None
-        }
-        
-        return VoterResponse(**voter_dict)
-        
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update voter: {str(e)}")
-
-
-@router.patch("/id/{voter_id}/update", response_model=VoterResponse)
-def update_voter_by_id(
-    voter_id: int,
-    voter_update: VoterUpdate,
-    request: Request,  # ✅ Add Request
-    current_user: Union[User, Volunteer] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update voter by voter_id with audit logging"""
-    try:
-        effective_user_id = get_effective_user_id(current_user)
-        
-        voter = db.query(Voter).filter(Voter.voter_id == voter_id).first()
-        if not voter:
-            raise HTTPException(status_code=404, detail="Voter not found")
-        
-        if not check_voter_access(voter, effective_user_id, db):
-            raise HTTPException(status_code=403, detail="Access denied")
-        
-        update_data = voter_update.model_dump(exclude_unset=True, exclude_none=True)
-        
-        # ✅ Track changes
-        changes = {}
-        for key, new_value in update_data.items():
-            if hasattr(voter, key):
-                old_value = getattr(voter, key)
-                if old_value != new_value:
-                    changes[key] = {'old': old_value, 'new': new_value}
-                    setattr(voter, key, new_value)
-        
-        db.commit()
-        db.refresh(voter)
-        
-        # ✅ Log changes
-        if changes:
-            try:
-                AuditLogger.log_multiple_changes(
-                    db=db,
-                    voter_id=voter.voter_id,
-                    epic_no=voter.epic_no,
-                    current_user=current_user,
-                    action_type='UPDATE',
-                    changes=changes,
-                    ip_address=request.client.host if request.client else None,
-                    device_info=request.headers.get('user-agent')
-                )
-                db.commit()
-            except Exception as e:
-                print(f"Audit log error: {e}")
-        
-        part = db.query(Part).filter(Part.part_id == voter.part_id).first()
-        voter_dict = {
-            **voter.__dict__,
-            'part_no': part.part_no if part else None,
-            'part_name': part.part_name_en if part else None
-        }
-        
-        return VoterResponse(**voter_dict)
-        
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update voter: {str(e)}")

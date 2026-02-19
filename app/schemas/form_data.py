@@ -3,14 +3,14 @@ from typing import Optional, List, Dict
 from datetime import date, datetime
 from decimal import Decimal
 
-
 class FamilyMemberCreate(BaseModel):
     name: str
     age: int
     gender: str
-    is_eligible_to_vote: bool
+    relation: str
+    is_eligible: bool
     voter_id: Optional[str] = None
-
+    aadhar_id: Optional[str] = None
 
 class FormDataCreate(BaseModel):
     volunteer_id: int
@@ -18,17 +18,20 @@ class FormDataCreate(BaseModel):
     address: Optional[str] = None
     colony: Optional[str] = None
     family_members: Optional[int] = 0
-    voter_id: Optional[str] = None
-    aadhar: Optional[str] = None
-    voter_names: Optional[str] = None
-    voter_ages: Optional[str] = None
-    voter_relation: Optional[str] = None
+    
+    # ✅ NEW: Head of family voter details
+    head_voter_id: Optional[str] = None
+    head_aadhar: Optional[str] = None
+    head_voter_name: Optional[str] = None
+    head_voter_age: Optional[str] = None
+    head_voter_relation: Optional[str] = None
+    
     gender: Optional[str] = None
     
     # Political
     knows_corporator: Optional[bool] = None
     satisfied_with_corporator: Optional[bool] = None
-    knows_politician: Optional[str] = None  # ✅ Changed to string
+    knows_politician: Optional[str] = None
     supports_politician: Optional[str] = None
     politician_visit_freq: Optional[str] = None
     
@@ -60,18 +63,17 @@ class FormDataCreate(BaseModel):
     # Family details
     family_details: Optional[List[FamilyMemberCreate]] = []
 
-
 class FormDataResponse(BaseModel):
     id: int
     volunteer_id: int
     household_name: Optional[str]
     address: Optional[str]
     colony: Optional[str]
-    voter_id: Optional[str]
-    aadhar: Optional[str]
-    voter_names: Optional[str]
-    voter_ages: Optional[str]
-    voter_relation: Optional[str]
+    head_voter_id: Optional[str]
+    head_aadhar: Optional[str]
+    head_voter_name: Optional[str]
+    head_voter_age: Optional[str]
+    head_voter_relation: Optional[str]
     gender: Optional[str]
     knows_corporator: Optional[bool]
     satisfied_with_corporator: Optional[bool]
@@ -86,7 +88,6 @@ class FormDataResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class MapPinResponse(BaseModel):
     id: int
     volunteer_id: int
@@ -95,14 +96,13 @@ class MapPinResponse(BaseModel):
     address: Optional[str]
     colony: Optional[str]
     area: Optional[str]
-    services_received: Optional[str]  # ✅ Match DB column
+    services_received: Optional[str]
     image_url: Optional[str]
     person_image_url: Optional[str]
     latitude: Decimal
     longitude: Decimal
     visit_date: Optional[date]
     
-    # ✅ NEW: Additional fields
     mobile_number: Optional[str]
     caste: Optional[str]
     religion: Optional[str]
@@ -116,23 +116,25 @@ class MapPinResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
 class DashboardSummaryResponse(BaseModel):
     total_households: int
     total_voters: int
     total_supporters: int
     satisfaction_count: Dict[str, int]
 
-
 class VoterDemographicsResponse(BaseModel):
     age_groups: Dict[str, int]
     gender_distribution: Dict[str, int]
 
-
-# ✅ FIX: Use RootModel for Pydantic V2
 class PoliticalSupportResponse(RootModel[Dict[str, int]]):
-    """
-    Dynamic political support breakdown - returns party names as keys.
-    Example: {"BRS": 10, "BJP": 15, "Congress": 8}
-    """
+    """Dynamic political support breakdown"""
     root: Dict[str, int]
+
+# ✅ NEW: Voter ID check response
+class VoterIdCheckResponse(BaseModel):
+    exists: bool
+    is_surveyed: bool
+    form_id: Optional[int] = None
+    household_name: Optional[str] = None
+    survey_date: Optional[date] = None
+    message: str

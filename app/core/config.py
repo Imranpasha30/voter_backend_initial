@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     # ✅ NEW: Document folder paths
     IMAGEKIT_FOLDER_PATH: str = "/VoterConnectImages/VoterCard"
     IMAGEKIT_FOLDER_PATH_2: str = "/VoterConnectImages/VoterCard2"
+    IMAGEKIT_FOLDER_PATH_3: str = "/VoterConnectImages/sharkify_user"
     
     class Config:
         env_file = ".env"

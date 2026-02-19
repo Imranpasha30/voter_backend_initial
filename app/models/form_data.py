@@ -1,8 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, Date, DateTime, ForeignKey, Numeric, Index
+from sqlalchemy import Column, Integer, String, Text, Boolean, Date, DateTime, ForeignKey, Numeric, Index, CheckConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base
-
 
 class FormData(Base):
     __tablename__ = "form_data"
@@ -23,13 +22,12 @@ class FormData(Base):
     colony = Column(String(255))
     area = Column(String(255))
     
-    # ✅ FIXED: Use actual DB column names (both exist in DB)
-    family_members = Column(Integer, nullable=True)  # Old column
-    family_members_count = Column(Integer, nullable=True)  # New column (Flutter sends this)
+    family_members = Column(Integer, nullable=True)
+    family_members_count = Column(Integer, nullable=True)
     
-    # ==============================
-    # 2. HEAD OF FAMILY VOTER INFO (Missing from Flutter!)
-    # ==============================
+    
+    
+    # ✅ DEPRECATED: Keep for backward compatibility (can be removed later)
     voter_id = Column(String(255), nullable=True)
     aadhar = Column(String(255), nullable=True)
     voter_names = Column(Text, nullable=True)
@@ -37,16 +35,19 @@ class FormData(Base):
     voter_relation = Column(Text, nullable=True)
     
     # ==============================
+    # ✅ NEW: Voting Status Tracking
+    # ==============================
+    is_voted = Column(Boolean, nullable=False, default=False, server_default='false', index=True)
+    voting_status = Column(String(10), nullable=True, index=True)  # 'red', 'yellow', 'green'
+    
+    
+    # ==============================
     # 3. Political Influence
     # ==============================
     knows_corporator = Column(Boolean)
     corporator_name = Column(String(255))
-    
-    # ✅ FIXED: Both columns exist in DB
-    knows_politician = Column(Text, nullable=True)  # Old column
-    other_politicians_known = Column(Text, nullable=True)  # New column (Flutter sends this)
-    
-    
+    knows_politician = Column(Text, nullable=True)
+    other_politicians_known = Column(Text, nullable=True)
     current_party_support = Column(String(255))
     favourite_party = Column(String(255))
     
@@ -56,10 +57,8 @@ class FormData(Base):
     services_received = Column(Text)
     service_frequency = Column(String(255))
     politician_visit_freq = Column(String(255))
-    
     satisfaction_with_corporator = Column(String(50))
     satisfaction_with_service = Column(String(50))
-    
     
     # ==============================
     # 5. Community Engagement
@@ -73,11 +72,8 @@ class FormData(Base):
     # ==============================
     income_range = Column(String(255))
     main_occupation = Column(String(255))
-    
-    # ✅ FIXED: Both columns exist in DB
-    education = Column(Text, nullable=True)  # Old column
-    highest_education = Column(Text, nullable=True)  # New column (Flutter sends this)
-    
+    education = Column(Text, nullable=True)
+    highest_education = Column(Text, nullable=True)
     housing_type = Column(String(255))
     govt_schemes = Column(Text)
     children_count = Column(Integer, nullable=True, default=0)
@@ -88,7 +84,6 @@ class FormData(Base):
     visit_date = Column(Date, nullable=True)
     volunteer_name = Column(String(255))
     remarks = Column(Text, nullable=True)
-    
     corporator_division = Column(String(255), nullable=True)
     zone = Column(String(255), nullable=True)
     
@@ -111,6 +106,24 @@ class FormData(Base):
     volunteer = relationship("Volunteer", back_populates="form_data")
     family_members_list = relationship("FamilyMember", back_populates="form_data", cascade="all, delete-orphan")
     
+    # ✅ NEW: Relationship to voters that were surveyed in this form
+    surveyed_voters = relationship(
+        "Voter",
+        foreign_keys="Voter.form_id",
+        back_populates="form",
+        cascade="all"
+    )
+    
     __table_args__ = (
         Index('idx_form_data_volunteer_id', 'volunteer_id'),
+        Index('idx_form_data_is_voted', 'is_voted'),
+        Index('idx_form_data_voting_status', 'voting_status'),
+        
+        Index('idx_form_data_mobile_number', 'mobile_number'),
+        # ✅ NEW
+        # ✅ Check constraint for voting_status
+        CheckConstraint(
+            "voting_status IS NULL OR voting_status IN ('red', 'yellow', 'green')",
+            name='check_voting_status'
+        ),
     )

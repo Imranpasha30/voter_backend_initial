@@ -5,6 +5,7 @@ from functools import lru_cache
 from datetime import datetime, timedelta
 from app.core.config import settings
 import logging
+import io
 
 
 logger = logging.getLogger(__name__)
@@ -358,6 +359,121 @@ class ImageKitService:
     def clear_cache(self):
         """Clear the cache - useful for testing or force refresh"""
         self.cache.clear()
+
+
+    def upload_user_profile_image(
+        self,
+        file_bytes: bytes,
+        file_name: str,
+        user_id: int,
+    ) -> Dict:
+        """
+        Upload a user profile image to ImageKit.
+        Stores under /VoterConnectImages/sharkify_user/{user_id}/
+        Returns the uploaded file's URL and fileId.
+        """
+        try:
+            # Sanitize file name
+            import re
+            safe_name = re.sub(r'[^a-zA-Z0-9._-]', '_', file_name)
+            folder_path = f"{settings.IMAGEKIT_FOLDER_PATH_3}/{user_id}"
+
+            logger.info(f"📤 Uploading profile image for user {user_id}")
+            logger.info(f"   File: {safe_name} ({len(file_bytes)} bytes)")
+            logger.info(f"   Folder: {folder_path}")
+
+            # Encode file to base64
+            encoded_file = base64.b64encode(file_bytes).decode('utf-8')
+
+            # Build upload payload
+            upload_url = "https://upload.imagekit.io/api/v1/files/upload"
+            payload = {
+                "file": encoded_file,
+                "fileName": safe_name,
+                "folder": folder_path,
+                "useUniqueFileName": True,  # Prevents collisions
+                "overwriteFile": False,
+            }
+
+            response = requests.post(
+                upload_url,
+                headers={
+                    "Authorization": self.headers["Authorization"]
+                    # ❌ Do NOT include Content-Type here — requests sets it for form data
+                },
+                data={
+                    "file": encoded_file,
+                    "fileName": safe_name,
+                    "folder": folder_path,
+                    "useUniqueFileName": "true",
+                },
+                timeout=60,
+            )
+
+            if response.status_code in (200, 201):
+                data = response.json()
+                file_url = data.get("url", "")
+                file_id = data.get("fileId", "")
+
+                logger.info(f"✅ Upload successful!")
+                logger.info(f"   URL: {file_url}")
+                logger.info(f"   FileId: {file_id}")
+
+                # Invalidate cache so next list_folders() picks up new file
+                self.cache.clear()
+
+                return {
+                    "success": True,
+                    "url": file_url,
+                    "file_id": file_id,
+                    "file_name": data.get("name", safe_name),
+                    "size": data.get("size", 0),
+                }
+            else:
+                logger.error(f"❌ Upload failed: {response.status_code} — {response.text}")
+                return {
+                    "success": False,
+                    "error": f"Upload failed with status {response.status_code}",
+                    "detail": response.text,
+                }
+
+        except requests.exceptions.Timeout:
+            logger.error("⏱️  Upload timeout")
+            return {"success": False, "error": "Upload timed out"}
+        except Exception as e:
+            logger.exception("❌ Unexpected error during profile image upload")
+            return {"success": False, "error": str(e)}
+
+
+    def delete_file(self, file_id: str) -> Dict:
+        """
+        Delete a file from ImageKit by fileId.
+        Used to remove old profile image when user uploads a new one.
+        """
+        try:
+            if not file_id:
+                return {"success": False, "error": "No file_id provided"}
+
+            logger.info(f"🗑️  Deleting file: {file_id}")
+            result = self._make_request(f"/files/{file_id}", method="DELETE_CALL")
+
+            # requests.delete needs special handling
+            url = f"{self.base_api_url}/files/{file_id}"
+            response = requests.delete(url, headers=self.headers, timeout=30)
+
+            if response.status_code in (200, 204):
+                logger.info(f"✅ File deleted: {file_id}")
+                self.cache.clear()
+                return {"success": True}
+            else:
+                logger.error(f"❌ Delete failed: {response.status_code}")
+                return {"success": False, "error": f"Delete failed: {response.status_code}"}
+
+        except Exception as e:
+            logger.exception("❌ Error deleting file")
+            return {"success": False, "error": str(e)}
+
+
 
 
 # Singleton instance

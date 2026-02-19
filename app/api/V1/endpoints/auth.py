@@ -34,23 +34,37 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=LoginResponse)
 def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db)):
-    """Login user and create login log"""
-    user = db.query(User).filter(User.email == credentials.email).first()
     
-    if not user or not verify_password(credentials.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
+    print(f"\n{'='*50}")
+    print(f"📧 Email received: '{credentials.email}'")
+    print(f"🔑 Password received: '{credentials.password}'")
+    
+    user = db.query(User).filter(User.email == credentials.email).first()
+    print(f"👤 User found: {user is not None}")
+    
+    if not user:
+        print("❌ FAIL: User not found in DB")
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+    
+    print(f"🔐 Hash in DB: '{user.password_hash}'")
+    print(f"📏 Hash length: {len(user.password_hash)}")
+    
+    # Manually compute what hash SHOULD be
+    import hashlib
+    expected_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
+    print(f"🧮 Expected hash: '{expected_hash}'")
+    print(f"✅ Match: {expected_hash == user.password_hash}")
+    
+    if not verify_password(credentials.password, user.password_hash):
+        print("❌ FAIL: Password mismatch")
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
     
     if not user.is_active:
+        print("❌ FAIL: User inactive")
         raise HTTPException(status_code=400, detail="User is inactive")
-    
-    # Update last login
+
     user.last_login = datetime.utcnow()
-    db.commit()
-    
-    # Create login log
+
     login_log = LoginLog(
         user_id=user.user_id,
         phone_number=credentials.phone_number,
@@ -59,15 +73,15 @@ def login(credentials: UserLogin, request: Request, db: Session = Depends(get_db
     )
     db.add(login_log)
     db.commit()
-    
-    # Create access token
-    access_token = create_access_token(data={"sub": user.email})
-    
-    return LoginResponse(
-        user=user,
-        access_token=access_token
+
+    access_token = create_access_token(
+        data={"sub": user.email, "type": "user"}  # ✅ add type
     )
 
+    print(f"🎉 Login SUCCESS for {user.email}")
+    print(f"{'='*50}\n")
+
+    return LoginResponse(user=user, access_token=access_token)
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):

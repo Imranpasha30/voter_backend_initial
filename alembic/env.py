@@ -23,6 +23,7 @@ from app.models.volunteer import Volunteer
 from app.models.form_data import FormData
 from app.models.family_member import FamilyMember
 from app.models.volunteer_location import VolunteerLocation
+from app.models.voter_change_log import VoterChangeLog
 
 # this is the Alembic Config object
 config = context.config

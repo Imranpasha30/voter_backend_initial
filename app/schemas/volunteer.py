@@ -7,7 +7,7 @@ class VolunteerCreate(BaseModel):
     username: str
     email: EmailStr
     password: str
-    phone_number: Optional[str] = None
+    mobile_number: Optional[str] = None
 
 
 class VolunteerLogin(BaseModel):
