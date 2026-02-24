@@ -3840,3 +3840,96 @@ RuntimeError: WebSocket is not connected. Need to call "accept" first.
 2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | ====================================================================================================
 2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | POLITICIAN 3 SESSION ENDED
 2026-01-26 12:30:25 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | 
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | POLITICIAN WEBSOCKET CONNECTION ATTEMPT
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Timestamp: 2026-02-21T10:47:24.170344+00:00
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Politician FOUND:
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  |    - POLITICIAN ID: 1
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  |    - Email: sharkify@gmail.com
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  |    - Full Name: sharkify
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Politician 1 WebSocket ACCEPTED
+2026-02-21 16:17:24 | INFO     | connect_politician             | Politician 1 connected (Connections: 1)
+2026-02-21 16:17:24 | INFO     | connect_politician             | All connected politicians: [1]
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Fetching volunteers FOR POLITICIAN 1 ONLY...
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Found 1 volunteer(s) for Politician 1
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  |    - Volunteer 1: offline
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | SENDING INITIAL STATE to Politician 1:
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  |    - Total volunteers: 1
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  |    - With recent locations: 0
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Initial state sent successfully
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Started periodic status check (every 30s)
+2026-02-21 16:17:24 | INFO     | politician_location_dashboard  | Listening for messages from Politician 1...
+2026-02-21 16:17:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:17:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:17:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:18:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:18:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:18:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:18:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:18:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:18:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:19:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:19:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:19:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:19:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:19:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:19:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:20:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:20:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:20:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:20:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:20:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:20:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:21:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:21:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:21:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:21:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:21:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:21:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:22:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:22:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:22:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:22:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:22:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:22:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:23:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:23:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:23:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:23:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:23:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:23:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:24:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:24:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:24:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:24:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:24:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:24:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:25:24 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:25:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:25:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:25:54 | INFO     | politician_location_dashboard  | Manual refresh requested by Politician 1
+2026-02-21 16:25:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:25:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:26:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:26:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:26:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:26:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:27:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:27:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:27:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:27:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:28:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:28:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:28:54 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:28:54 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:29:24 | DEBUG    | periodic_status_check          | Periodic status check for Politician 1
+2026-02-21 16:29:24 | DEBUG    | periodic_status_check          | Status sync sent to Politician 1: 1 volunteers
+2026-02-21 16:29:32 | INFO     | politician_location_dashboard  | Politician 1 disconnected gracefully
+2026-02-21 16:29:32 | INFO     | periodic_status_check          | Status check task cancelled for Politician 1
+2026-02-21 16:29:32 | INFO     | disconnect_politician          | Politician 1 fully disconnected
+2026-02-21 16:29:32 | INFO     | politician_location_dashboard  | Cleanup complete for politician 1
+2026-02-21 16:29:32 | INFO     | politician_location_dashboard  | ====================================================================================================
+2026-02-21 16:29:32 | INFO     | politician_location_dashboard  | POLITICIAN 1 SESSION ENDED
+2026-02-21 16:29:32 | INFO     | politician_location_dashboard  | ====================================================================================================

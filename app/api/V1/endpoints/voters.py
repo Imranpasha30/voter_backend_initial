@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, case
 from typing import Optional, Union
-from sqlalchemy import case 
 
 from app.db.session import get_db
 from app.models.voter import Voter
@@ -21,58 +20,56 @@ from app.services.audit_logger import AuditLogger
 router = APIRouter()
 
 
-# ✅ Helper function to get effective user ID
+# ─────────────────────────────────────────────
+# ✅ SQLAlchemy 2.x compatible age case builder
+# ─────────────────────────────────────────────
+
+def build_age_case():
+    """
+    SQLAlchemy 2.0 case() syntax:
+    case(whens=[(condition, value), ...], else_=value)
+    """
+    return case(
+        (Voter.age.between(18, 24), '18-24'),
+        (Voter.age.between(25, 34), '25-34'),
+        (Voter.age.between(35, 44), '35-44'),
+        (Voter.age.between(45, 54), '45-54'),
+        (Voter.age.between(55, 64), '55-64'),
+        (Voter.age >= 65,           '65+'),
+        else_='Unknown'
+    )
+
+
+# ─────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────
+
 def get_effective_user_id(current_user: Union[User, Volunteer]) -> int:
-    """
-    Returns the user_id to use for filtering data.
-    - If current_user is a Politician (User model): return their user_id
-    - If current_user is a Volunteer: return their politician_id (parent)
-    """
     if hasattr(current_user, 'politician_id'):
         return current_user.politician_id
-    else:
-        return current_user.user_id
+    return current_user.user_id
 
 
-# ✅ Helper function to check user access to voter
 def check_voter_access(voter: Voter, user_id: int, db: Session) -> bool:
-    """Check if user has access to this voter's area"""
     user_area_ids = db.query(UserArea.area_id).filter(
         UserArea.user_id == user_id
     ).all()
-    user_area_ids = [area.area_id for area in user_area_ids]
-    
+    user_area_ids = [a.area_id for a in user_area_ids]
     if not user_area_ids:
         return False
-    
     part = db.query(Part).filter(Part.part_id == voter.part_id).first()
     if not part or part.area_id not in user_area_ids:
         return False
-    
     return True
 
 
-# ✅ Helper function to select language-specific columns
 def get_voter_dict_with_language(voter: Voter, part: Part, lang: str = 'en') -> dict:
-    """
-    Return voter dictionary with language-specific fields.
-    
-    lang='te' -> Use Telugu columns (base columns)
-    lang='en' -> Use English columns (*_en columns)
-    """
     voter_dict = voter.__dict__.copy()
-    
-    # Part information
     voter_dict['part_no'] = part.part_no if part else None
-    
     if lang == 'te':
-        # Telugu: use base columns
         voter_dict['part_name'] = part.part_name_v1 if part else None
-        # Base columns are already in voter_dict (district, municipality, etc.)
     else:
-        # English: use *_en columns
         voter_dict['part_name'] = part.part_name_en if part else None
-        # Override with English columns if available
         if voter.district_en:
             voter_dict['district'] = voter.district_en
         if voter.municipality_en:
@@ -83,12 +80,196 @@ def get_voter_dict_with_language(voter: Voter, part: Part, lang: str = 'en') -> 
             voter_dict['voter_name'] = voter.voter_name_en
         if voter.relation_name_en:
             voter_dict['relation_name'] = voter.relation_name_en
-    
     return voter_dict
+
+
+def _get_empty_dashboard():
+    return {
+        "total_voters": 0,
+        "gender": [],
+        "age_groups": [],
+        "phone_coverage": {"with_phone": 0, "without_phone": 0},
+        "survey": {"surveyed": 0, "not_surveyed": 0}
+    }
 
 
 # ==================== VOTER ENDPOINTS ====================
 
+
+# ─────────────────────────────────────────────
+# Dashboard Stats
+# ─────────────────────────────────────────────
+
+@router.get("/stats/dashboard")
+def get_voter_dashboard_stats(
+    current_user: Union[User, Volunteer] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns total voters, gender breakdown, age groups,
+    phone coverage, and survey stats — scoped to the
+    current user's assigned areas.
+    """
+    effective_user_id = get_effective_user_id(current_user)
+
+    user_area_ids = [
+        a.area_id for a in db.query(UserArea.area_id).filter(
+            UserArea.user_id == effective_user_id
+        ).all()
+    ]
+    if not user_area_ids:
+        return _get_empty_dashboard()
+
+    part_ids = [
+        p.part_id for p in db.query(Part.part_id).filter(
+            Part.area_id.in_(user_area_ids)
+        ).all()
+    ]
+    if not part_ids:
+        return _get_empty_dashboard()
+
+    base_q = db.query(Voter).filter(Voter.part_id.in_(part_ids))
+
+    # ── Total ──
+    total_voters = base_q.count()
+
+    # ── Gender ──
+    gender_rows = (
+        db.query(Voter.gender, func.count(Voter.voter_id).label('count'))
+        .filter(Voter.part_id.in_(part_ids))
+        .group_by(Voter.gender)
+        .all()
+    )
+    gender_distribution = [
+        {"gender": g or "Unknown", "count": c}
+        for g, c in gender_rows
+    ]
+
+    # ── Age Groups — SQLAlchemy 2.0 syntax ──
+    age_expr = build_age_case()
+    age_rows = (
+        db.query(age_expr.label('age_group'), func.count(Voter.voter_id).label('count'))
+        .filter(Voter.part_id.in_(part_ids), Voter.age.isnot(None))
+        .group_by(age_expr)
+        .all()
+    )
+
+    age_order = ['18-24', '25-34', '35-44', '45-54', '55-64', '65+']
+    age_groups = sorted(
+        [{"age_group": a, "count": c} for a, c in age_rows if a != 'Unknown'],
+        key=lambda x: age_order.index(x['age_group']) if x['age_group'] in age_order else 99
+    )
+
+    # ── Phone Coverage ──
+    with_phone = base_q.filter(
+        Voter.phone_number.isnot(None),
+        Voter.phone_number != ''
+    ).count()
+    without_phone = total_voters - with_phone
+
+    # ── Survey ──
+    surveyed     = base_q.filter(Voter.is_surveyed == True).count()
+    not_surveyed = total_voters - surveyed
+
+    return {
+        "total_voters": total_voters,
+        "gender": gender_distribution,
+        "age_groups": age_groups,
+        "phone_coverage": {
+            "with_phone": with_phone,
+            "without_phone": without_phone
+        },
+        "survey": {
+            "surveyed": surveyed,
+            "not_surveyed": not_surveyed
+        }
+    }
+
+
+# ─────────────────────────────────────────────
+# Stats Summary
+# ─────────────────────────────────────────────
+
+@router.get("/stats/summary")
+def get_voter_statistics(
+    lang: str = Query('en', description="Language: 'en' or 'te'"),
+    current_user: Union[User, Volunteer] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    lang = lang.lower()
+    if lang not in ('en', 'te'):
+        lang = 'en'
+
+    effective_user_id = get_effective_user_id(current_user)
+
+    user_area_ids = [
+        a.area_id for a in db.query(UserArea.area_id).filter(
+            UserArea.user_id == effective_user_id
+        ).all()
+    ]
+    if not user_area_ids:
+        return {"total_voters": 0, "gender_distribution": [], "age_distribution": []}
+
+    part_ids = [
+        p.part_id for p in db.query(Part.part_id).filter(
+            Part.area_id.in_(user_area_ids)
+        ).all()
+    ]
+    if not part_ids:
+        return {"total_voters": 0, "gender_distribution": [], "age_distribution": []}
+
+    total_voters = db.query(func.count(Voter.voter_id)).filter(
+        Voter.part_id.in_(part_ids)
+    ).scalar()
+
+    gender_rows = (
+        db.query(Voter.gender, func.count(Voter.voter_id).label('count'))
+        .filter(Voter.part_id.in_(part_ids))
+        .group_by(Voter.gender)
+        .all()
+    )
+
+    # ── Age Groups — SQLAlchemy 2.0 syntax ──
+    age_expr = build_age_case()
+    age_rows = (
+        db.query(age_expr.label('age_group'), func.count(Voter.voter_id).label('count'))
+        .filter(Voter.part_id.in_(part_ids), Voter.age.isnot(None))
+        .group_by(age_expr)
+        .all()
+    )
+
+    if lang == 'te':
+        gender_translation = {
+            'Male': 'పురుషుడు',
+            'Female': 'స్త్రీ',
+            'Other': 'ఇతర'
+        }
+        gender_distribution = [
+            {"gender": gender_translation.get(g, g or 'Unknown'), "count": c}
+            for g, c in gender_rows
+        ]
+    else:
+        gender_distribution = [
+            {"gender": g or 'Unknown', "count": c}
+            for g, c in gender_rows
+        ]
+
+    age_distribution = [
+        {"age_group": a, "count": c}
+        for a, c in age_rows
+        if a != 'Unknown'
+    ]
+
+    return {
+        "total_voters": total_voters,
+        "gender_distribution": gender_distribution,
+        "age_distribution": age_distribution
+    }
+
+
+# ─────────────────────────────────────────────
+# Get Voters by Part (with filters)
+# ─────────────────────────────────────────────
 
 @router.get("/", response_model=VotersListResponse)
 def get_voters_by_part(
@@ -97,77 +278,89 @@ def get_voters_by_part(
     page_size: int = Query(settings.DEFAULT_PAGE_SIZE, ge=1, le=settings.MAX_PAGE_SIZE),
     search: Optional[str] = None,
     lang: str = Query('en', description="Language: 'en' or 'te'"),
+    gender: Optional[str] = Query(None, description="Filter by gender: Male/Female/Other"),
+    age_min: Optional[int] = Query(None, description="Minimum age"),
+    age_max: Optional[int] = Query(None, description="Maximum age"),
+    has_phone: Optional[bool] = Query(None, description="Filter voters with/without phone"),
+    is_surveyed: Optional[bool] = Query(None, description="Filter by survey status"),
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Get voters by part number (assembly constituency) - works for Politicians and Volunteers
-    
-    Query Parameters:
-    - lang: 'en' for English, 'te' for Telugu (default: 'en')
-    """
-    
     lang = lang.lower()
     if lang not in ('en', 'te'):
-        lang = 'en'  # Default to English if invalid
-    
+        lang = 'en'
+
     effective_user_id = get_effective_user_id(current_user)
-    
-    user_area_ids = db.query(UserArea.area_id).filter(
-        UserArea.user_id == effective_user_id
-    ).all()
-    user_area_ids = [area.area_id for area in user_area_ids]
-    
+
+    user_area_ids = [
+        a.area_id for a in db.query(UserArea.area_id).filter(
+            UserArea.user_id == effective_user_id
+        ).all()
+    ]
     if not user_area_ids:
         raise HTTPException(status_code=403, detail="No areas assigned to your account")
-    
+
     part = db.query(Part).filter(Part.part_no == ac_no).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
-    
+
     if part.area_id not in user_area_ids:
         raise HTTPException(status_code=403, detail="Access denied to this constituency")
-    
+
     query = db.query(Voter).filter(Voter.part_id == part.part_id)
-    
-    # ✅ Search in language-specific columns
+
+    # ── Search ──
     if search:
         if lang == 'te':
-            # Search Telugu columns
+            query = query.filter(or_(
+                Voter.voter_name.ilike(f"%{search}%"),
+                Voter.epic_no.ilike(f"%{search}%"),
+                Voter.phone_number.ilike(f"%{search}%"),
+                Voter.house_no.ilike(f"%{search}%"),
+                Voter.relation_name.ilike(f"%{search}%"),
+            ))
+        else:
+            query = query.filter(or_(
+                Voter.voter_name_en.ilike(f"%{search}%"),
+                Voter.voter_name.ilike(f"%{search}%"),
+                Voter.epic_no.ilike(f"%{search}%"),
+                Voter.phone_number.ilike(f"%{search}%"),
+                Voter.house_no.ilike(f"%{search}%"),
+                Voter.relation_name_en.ilike(f"%{search}%"),
+                Voter.relation_name.ilike(f"%{search}%"),
+            ))
+
+    # ── Filters ──
+    if gender:
+        query = query.filter(Voter.gender.ilike(gender))
+    if age_min is not None:
+        query = query.filter(Voter.age >= age_min)
+    if age_max is not None:
+        query = query.filter(Voter.age <= age_max)
+    if has_phone is not None:
+        if has_phone:
             query = query.filter(
-                or_(
-                    Voter.voter_name.ilike(f"%{search}%"),
-                    Voter.epic_no.ilike(f"%{search}%"),
-                    Voter.phone_number.ilike(f"%{search}%"),
-                    Voter.house_no.ilike(f"%{search}%"),
-                    Voter.relation_name.ilike(f"%{search}%")
-                )
+                Voter.phone_number.isnot(None),
+                Voter.phone_number != ''
             )
         else:
-            # Search English columns
-            query = query.filter(
-                or_(
-                    Voter.voter_name_en.ilike(f"%{search}%"),
-                    Voter.voter_name.ilike(f"%{search}%"),  # Fallback
-                    Voter.epic_no.ilike(f"%{search}%"),
-                    Voter.phone_number.ilike(f"%{search}%"),
-                    Voter.house_no.ilike(f"%{search}%"),
-                    Voter.relation_name_en.ilike(f"%{search}%"),
-                    Voter.relation_name.ilike(f"%{search}%")  # Fallback
-                )
-            )
-    
-    query = query.order_by(Voter.serial_no)
-    total = query.count()
+            query = query.filter(or_(
+                Voter.phone_number.is_(None),
+                Voter.phone_number == ''
+            ))
+    if is_surveyed is not None:
+        query = query.filter(Voter.is_surveyed == is_surveyed)
+
+    query  = query.order_by(Voter.serial_no)
+    total  = query.count()
     offset = (page - 1) * page_size
     voters = query.offset(offset).limit(page_size).all()
-    
-    # ✅ Transform voters with language-specific data
-    voter_responses = []
-    for voter in voters:
-        voter_dict = get_voter_dict_with_language(voter, part, lang)
-        voter_responses.append(VoterResponse(**voter_dict))
-    
+
+    voter_responses = [
+        VoterResponse(**get_voter_dict_with_language(v, part, lang))
+        for v in voters
+    ]
+
     return VotersListResponse(
         total=total,
         page=page,
@@ -175,6 +368,10 @@ def get_voters_by_part(
         voters=voter_responses
     )
 
+
+# ─────────────────────────────────────────────
+# Search Voters (global)
+# ─────────────────────────────────────────────
 
 @router.get("/search", response_model=VotersListResponse)
 def search_voters(
@@ -185,34 +382,28 @@ def search_voters(
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Search voters globally by name, EPIC, or phone - respects user's assigned areas
-    
-    Query Parameters:
-    - lang: 'en' for English, 'te' for Telugu (default: 'en')
-    """
-    
     lang = lang.lower()
     if lang not in ('en', 'te'):
         lang = 'en'
-    
+
     effective_user_id = get_effective_user_id(current_user)
-    
-    user_area_ids = db.query(UserArea.area_id).filter(
-        UserArea.user_id == effective_user_id
-    ).all()
-    user_area_ids = [area.area_id for area in user_area_ids]
-    
+
+    user_area_ids = [
+        a.area_id for a in db.query(UserArea.area_id).filter(
+            UserArea.user_id == effective_user_id
+        ).all()
+    ]
     if not user_area_ids:
         return VotersListResponse(total=0, page=page, page_size=page_size, voters=[])
-    
-    part_ids = db.query(Part.part_id).filter(Part.area_id.in_(user_area_ids)).all()
-    part_ids = [p.part_id for p in part_ids]
-    
+
+    part_ids = [
+        p.part_id for p in db.query(Part.part_id).filter(
+            Part.area_id.in_(user_area_ids)
+        ).all()
+    ]
     if not part_ids:
         return VotersListResponse(total=0, page=page, page_size=page_size, voters=[])
-    
-    # ✅ Search based on language
+
     if lang == 'te':
         query = db.query(Voter).filter(
             Voter.part_id.in_(part_ids),
@@ -221,7 +412,7 @@ def search_voters(
                 Voter.epic_no.ilike(f"%{q}%"),
                 Voter.phone_number.ilike(f"%{q}%"),
                 Voter.house_no.ilike(f"%{q}%"),
-                Voter.relation_name.ilike(f"%{q}%")
+                Voter.relation_name.ilike(f"%{q}%"),
             )
         )
     else:
@@ -234,21 +425,20 @@ def search_voters(
                 Voter.phone_number.ilike(f"%{q}%"),
                 Voter.house_no.ilike(f"%{q}%"),
                 Voter.relation_name_en.ilike(f"%{q}%"),
-                Voter.relation_name.ilike(f"%{q}%")
+                Voter.relation_name.ilike(f"%{q}%"),
             )
         )
-    
-    total = query.count()
+
+    total  = query.count()
     offset = (page - 1) * page_size
     voters = query.offset(offset).limit(page_size).all()
-    
-    # ✅ Get parts for language-specific transformation
+
     voter_responses = []
     for voter in voters:
         part = db.query(Part).filter(Part.part_id == voter.part_id).first()
         voter_dict = get_voter_dict_with_language(voter, part, lang)
         voter_responses.append(VoterResponse(**voter_dict))
-    
+
     return VotersListResponse(
         total=total,
         page=page,
@@ -257,6 +447,10 @@ def search_voters(
     )
 
 
+# ─────────────────────────────────────────────
+# Get by EPIC No
+# ─────────────────────────────────────────────
+
 @router.get("/{epic_no}", response_model=VoterResponse)
 def get_voter_by_epic(
     epic_no: str,
@@ -264,32 +458,26 @@ def get_voter_by_epic(
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Get voter details by EPIC number - with access control
-    
-    Query Parameters:
-    - lang: 'en' for English, 'te' for Telugu (default: 'en')
-    """
-    
     lang = lang.lower()
     if lang not in ('en', 'te'):
         lang = 'en'
-    
+
     effective_user_id = get_effective_user_id(current_user)
-    
+
     voter = db.query(Voter).filter(Voter.epic_no == epic_no).first()
     if not voter:
         raise HTTPException(status_code=404, detail="Voter not found")
-    
+
     if not check_voter_access(voter, effective_user_id, db):
         raise HTTPException(status_code=403, detail="Access denied to this voter")
-    
-    part = db.query(Part).filter(Part.part_id == voter.part_id).first()
-    
-    voter_dict = get_voter_dict_with_language(voter, part, lang)
-    
-    return VoterResponse(**voter_dict)
 
+    part = db.query(Part).filter(Part.part_id == voter.part_id).first()
+    return VoterResponse(**get_voter_dict_with_language(voter, part, lang))
+
+
+# ─────────────────────────────────────────────
+# Get by Voter ID
+# ─────────────────────────────────────────────
 
 @router.get("/id/{voter_id}", response_model=VoterResponse)
 def get_voter_by_id(
@@ -298,32 +486,26 @@ def get_voter_by_id(
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Get voter details by voter ID - with access control
-    
-    Query Parameters:
-    - lang: 'en' for English, 'te' for Telugu (default: 'en')
-    """
-    
     lang = lang.lower()
     if lang not in ('en', 'te'):
         lang = 'en'
-    
+
     effective_user_id = get_effective_user_id(current_user)
-    
+
     voter = db.query(Voter).filter(Voter.voter_id == voter_id).first()
     if not voter:
         raise HTTPException(status_code=404, detail="Voter not found")
-    
+
     if not check_voter_access(voter, effective_user_id, db):
         raise HTTPException(status_code=403, detail="Access denied to this voter")
-    
-    part = db.query(Part).filter(Part.part_id == voter.part_id).first()
-    
-    voter_dict = get_voter_dict_with_language(voter, part, lang)
-    
-    return VoterResponse(**voter_dict)
 
+    part = db.query(Part).filter(Part.part_id == voter.part_id).first()
+    return VoterResponse(**get_voter_dict_with_language(voter, part, lang))
+
+
+# ─────────────────────────────────────────────
+# Create Voter
+# ─────────────────────────────────────────────
 
 @router.post("/", response_model=VoterResponse, status_code=status.HTTP_201_CREATED)
 def create_voter(
@@ -332,32 +514,29 @@ def create_voter(
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Create new voter - with access control and audit logging"""
-    
     effective_user_id = get_effective_user_id(current_user)
-    
+
     existing = db.query(Voter).filter(Voter.epic_no == voter.epic_no).first()
     if existing:
         raise HTTPException(status_code=400, detail="EPIC number already exists")
-    
+
     part = db.query(Part).filter(Part.part_id == voter.part_id).first()
     if not part:
         raise HTTPException(status_code=404, detail="Part not found")
-    
-    user_area_ids = db.query(UserArea.area_id).filter(
-        UserArea.user_id == effective_user_id
-    ).all()
-    user_area_ids = [area.area_id for area in user_area_ids]
-    
+
+    user_area_ids = [
+        a.area_id for a in db.query(UserArea.area_id).filter(
+            UserArea.user_id == effective_user_id
+        ).all()
+    ]
     if part.area_id not in user_area_ids:
         raise HTTPException(status_code=403, detail="Access denied to create voter in this area")
-    
+
     db_voter = Voter(**voter.model_dump())
     db.add(db_voter)
     db.commit()
     db.refresh(db_voter)
-    
-    # ✅ Log creation
+
     try:
         AuditLogger.log_voter_change(
             db=db,
@@ -373,9 +552,13 @@ def create_voter(
         db.commit()
     except Exception as e:
         print(f"Audit log error: {e}")
-    
+
     return db_voter
 
+
+# ─────────────────────────────────────────────
+# Update Voter by EPIC
+# ─────────────────────────────────────────────
 
 @router.patch("/{epic_no}/update", response_model=VoterResponse)
 def update_voter_by_epic(
@@ -386,41 +569,38 @@ def update_voter_by_epic(
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Update voter details with audit logging
-    
-    Query Parameters:
-    - lang: 'en' for English, 'te' for Telugu (default: 'en') - affects response only
-    """
     try:
         lang = lang.lower()
         if lang not in ('en', 'te'):
             lang = 'en'
-        
+
         effective_user_id = get_effective_user_id(current_user)
-        
+
         voter = db.query(Voter).filter(Voter.epic_no == epic_no).first()
         if not voter:
             raise HTTPException(status_code=404, detail="Voter not found")
-        
+
         if not check_voter_access(voter, effective_user_id, db):
             raise HTTPException(status_code=403, detail="Access denied")
-        
+
         update_data = voter_update.model_dump(exclude_unset=True, exclude_none=True)
-        
+
         if 'part_id' in update_data:
             new_part = db.query(Part).filter(Part.part_id == update_data['part_id']).first()
             if not new_part:
                 raise HTTPException(status_code=404, detail="Invalid part_id")
-            
-            user_area_ids = [area.area_id for area in db.query(UserArea.area_id).filter(
-                UserArea.user_id == effective_user_id
-            ).all()]
-            
+
+            user_area_ids = [
+                a.area_id for a in db.query(UserArea.area_id).filter(
+                    UserArea.user_id == effective_user_id
+                ).all()
+            ]
             if new_part.area_id not in user_area_ids:
-                raise HTTPException(status_code=403, detail="Access denied: Cannot move voter to this constituency")
-        
-        # ✅ Track changes
+                raise HTTPException(
+                    status_code=403,
+                    detail="Access denied: Cannot move voter to this constituency"
+                )
+
         changes = {}
         for key, new_value in update_data.items():
             if hasattr(voter, key):
@@ -428,11 +608,10 @@ def update_voter_by_epic(
                 if old_value != new_value:
                     changes[key] = {'old': old_value, 'new': new_value}
                     setattr(voter, key, new_value)
-        
+
         db.commit()
         db.refresh(voter)
-        
-        # ✅ Log changes
+
         if changes:
             try:
                 AuditLogger.log_multiple_changes(
@@ -448,12 +627,10 @@ def update_voter_by_epic(
                 db.commit()
             except Exception as e:
                 print(f"Audit log error: {e}")
-        
+
         part = db.query(Part).filter(Part.part_id == voter.part_id).first()
-        voter_dict = get_voter_dict_with_language(voter, part, lang)
-        
-        return VoterResponse(**voter_dict)
-        
+        return VoterResponse(**get_voter_dict_with_language(voter, part, lang))
+
     except HTTPException:
         db.rollback()
         raise
@@ -462,6 +639,10 @@ def update_voter_by_epic(
         raise HTTPException(status_code=500, detail=f"Failed to update voter: {str(e)}")
 
 
+# ─────────────────────────────────────────────
+# Delete Voter
+# ─────────────────────────────────────────────
+
 @router.delete("/{voter_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_voter(
     voter_id: int,
@@ -469,21 +650,18 @@ def delete_voter(
     current_user: Union[User, Volunteer] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Delete voter - with access control and audit logging"""
-    
     effective_user_id = get_effective_user_id(current_user)
-    
+
     voter = db.query(Voter).filter(Voter.voter_id == voter_id).first()
     if not voter:
         raise HTTPException(status_code=404, detail="Voter not found")
-    
+
     if not check_voter_access(voter, effective_user_id, db):
         raise HTTPException(status_code=403, detail="Access denied")
-    
-    epic_no = voter.epic_no
+
+    epic_no    = voter.epic_no
     voter_name = voter.voter_name
-    
-    # ✅ Log deletion
+
     try:
         AuditLogger.log_voter_change(
             db=db,
@@ -499,109 +677,7 @@ def delete_voter(
         db.commit()
     except Exception as e:
         print(f"Audit log error: {e}")
-    
+
     db.delete(voter)
     db.commit()
-    
     return None
-
-
-@router.get("/stats/summary")
-def get_voter_statistics(
-    lang: str = Query('en', description="Language: 'en' or 'te'"),
-    current_user: Union[User, Volunteer] = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get voter statistics - respects user's assigned areas
-    
-    Query Parameters:
-    - lang: 'en' for English, 'te' for Telugu (default: 'en')
-    """
-    
-    lang = lang.lower()
-    if lang not in ('en', 'te'):
-        lang = 'en'
-    
-    effective_user_id = get_effective_user_id(current_user)
-    
-    user_area_ids = db.query(UserArea.area_id).filter(
-        UserArea.user_id == effective_user_id
-    ).all()
-    user_area_ids = [area.area_id for area in user_area_ids]
-    
-    if not user_area_ids:
-        return {
-            "total_voters": 0,
-            "gender_distribution": [],
-            "age_distribution": []
-        }
-    
-    part_ids = db.query(Part.part_id).filter(Part.area_id.in_(user_area_ids)).all()
-    part_ids = [p.part_id for p in part_ids]
-    
-    if not part_ids:
-        return {
-            "total_voters": 0,
-            "gender_distribution": [],
-            "age_distribution": []
-        }
-    
-    total_voters = db.query(func.count(Voter.voter_id)).filter(
-        Voter.part_id.in_(part_ids)
-    ).scalar()
-    
-    gender_stats = db.query(
-        Voter.gender,
-        func.count(Voter.voter_id).label('count')
-    ).filter(Voter.part_id.in_(part_ids)).group_by(Voter.gender).all()
-    
-    age_stats = db.query(
-        func.case(
-            (Voter.age < 25, '18-24'),
-            (Voter.age < 35, '25-34'),
-            (Voter.age < 45, '35-44'),
-            (Voter.age < 55, '45-54'),
-            (Voter.age < 65, '55-64'),
-            else_='65+'
-        ).label('age_group'),
-        func.count(Voter.voter_id).label('count')
-    ).filter(Voter.part_id.in_(part_ids)).group_by('age_group').all()
-    
-    # ✅ Translate labels if Telugu
-    if lang == 'te':
-        gender_translation = {
-            'Male': 'పురుషుడు',
-            'Female': 'స్త్రీ',
-            'Other': 'ఇతర'
-        }
-        gender_distribution = [
-            {
-                "gender": gender_translation.get(g, g),
-                "count": c
-            } for g, c in gender_stats
-        ]
-        
-        age_translation = {
-            '18-24': '18-24',
-            '25-34': '25-34',
-            '35-44': '35-44',
-            '45-54': '45-54',
-            '55-64': '55-64',
-            '65+': '65+'
-        }
-        age_distribution = [
-            {
-                "age_group": age_translation.get(a, a),
-                "count": c
-            } for a, c in age_stats
-        ]
-    else:
-        gender_distribution = [{"gender": g, "count": c} for g, c in gender_stats]
-        age_distribution = [{"age_group": a, "count": c} for a, c in age_stats]
-    
-    return {
-        "total_voters": total_voters,
-        "gender_distribution": gender_distribution,
-        "age_distribution": age_distribution
-    }
